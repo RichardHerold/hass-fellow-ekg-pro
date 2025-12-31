@@ -29,7 +29,10 @@
 ### Method 1: Check your router
 - Log into your router's admin interface
 - Look for connected devices
-- Find a device named "EKG-XX-XX-XX" or similar
+- Look for:
+  - "Stagg EKG", "Fellow", or "EKG-XX-XX-XX"
+  - "espressif" (ESP32 manufacturer)
+  - May include MAC address like "espressif 16:b0"
 
 ### Method 2: Use nmap
 ```bash

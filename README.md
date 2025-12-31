@@ -87,7 +87,10 @@ Works with all Fellow kettles that have the HTTP CLI interface.
 The kettle connects to your WiFi network. Find its IP address:
 
 1. Check your router's DHCP client list
-2. Look for a device named "Stagg EKG" or similar
+2. Look for a device named:
+   - "Stagg EKG" or "Fellow"
+   - "espressif" (the ESP32 manufacturer)
+   - May include part of the MAC address (e.g., "espressif 16:b0")
 3. Note the IP address (e.g., `192.168.1.100`)
 
 **Tip:** Set a static IP or DHCP reservation for your kettle to prevent the address from changing.
