@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Stagg EKG+",
+        "description": "Enter the IP address of your Stagg EKG+ kettle and select your preferred temperature unit",
+        "data": {
+          "host": "IP Address",
+          "temperature_unit": "Temperature Unit"
+        },
+        "data_description": {
+          "temperature_unit": "This will also update the kettle's display unit"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the kettle. Please check the IP address and ensure the kettle is powered on and connected to your network.",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Stagg EKG+ Options",
+        "description": "Configure your kettle settings",
+        "data": {
+          "temperature_unit": "Temperature Unit"
+        },
+        "data_description": {
+          "temperature_unit": "Changing this will update both Home Assistant and the kettle's display unit"
+        }
+      }
+    }
+  },
+  "selector": {
+    "temperature_unit": {
+      "options": {
+        "celsius": "Celsius (°C)",
+        "fahrenheit": "Fahrenheit (°F)"
+      }
+    }
+  }
+}
