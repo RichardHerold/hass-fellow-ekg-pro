@@ -14,7 +14,7 @@ If you find a bug or have a feature request:
    - Steps to reproduce (for bugs)
    - Expected vs actual behavior
    - Your Home Assistant version
-   - Kettle firmware version (from `stagg_ekg_api.py` or integration logs)
+   - Kettle firmware version (from `fellow_api.py` or integration logs)
    - Relevant logs or error messages
 
 ### Submitting Code
@@ -56,7 +56,7 @@ If you add features, please update:
 ## Development Setup
 
 1. Clone the repository
-2. Copy `custom_components/stagg_ekg` to your HA config
+2. Copy `custom_components/fellow` to your HA config
 3. Restart Home Assistant
 4. Add the integration with your kettle's IP
 
@@ -66,4 +66,4 @@ Feel free to open an issue for questions or discussions.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the Unlicense.

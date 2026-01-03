@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-01-03
+
+### Breaking Changes
+- **Domain renamed from `stagg_ekg` to `fellow`** to match Home Assistant brands repository and support all Fellow EKG models
+- **Entity IDs have changed**:
+  - `water_heater.stagg_ekg_kettle` → `water_heater.fellow_kettle`
+  - `sensor.stagg_ekg_current_temperature` → `sensor.fellow_current_temperature`
+  - `sensor.stagg_ekg_target_temperature` → `sensor.fellow_target_temperature`
+  - `sensor.stagg_ekg_mode` → `sensor.fellow_mode`
+  - `switch.stagg_ekg_heating` → `switch.fellow_heating`
+  - `switch.stagg_ekg_warming` → `switch.fellow_warming`
+  - `binary_sensor.stagg_ekg_power` → `binary_sensor.fellow_power`
+  - `binary_sensor.stagg_ekg_low_water_warning` → `binary_sensor.fellow_low_water_warning`
+- **Directory renamed**: `custom_components/stagg_ekg/` → `custom_components/fellow/`
+
+### Migration Instructions
+1. Remove the old integration from Home Assistant (Settings → Devices & Services)
+2. Delete the `custom_components/stagg_ekg` folder
+3. Install v2.0.0 with the new `custom_components/fellow` folder
+4. Re-add the integration
+5. Update all automations, scripts, and dashboard cards to use new entity IDs
+
+### Added
+- Added `issue_tracker` to manifest.json for better HACS compliance
+- GitHub Actions for HACS and Hassfest validation
+
+### Fixed
+- Fixed HACS validation errors (removed invalid keys from hacs.json)
+- Fixed manifest key ordering to meet Home Assistant requirements
+- Integration now aligns with Home Assistant brands repository entry
+
 ## [1.0.0] - 2025-12-27
 
 ### Added

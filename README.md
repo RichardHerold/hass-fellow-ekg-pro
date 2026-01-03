@@ -45,14 +45,14 @@ Works with all Fellow kettles that have the HTTP CLI interface.
 
 | Entity | Type | Purpose |
 |--------|------|---------|
-| `water_heater.stagg_ekg_kettle` | Water Heater | Main control interface |
-| `sensor.stagg_ekg_current_temperature` | Sensor | Real-time water temperature |
-| `sensor.stagg_ekg_target_temperature` | Sensor | Target temperature setting |
-| `sensor.stagg_ekg_mode` | Sensor | Operating mode (Off, Heat, Standby) |
-| `switch.stagg_ekg_heating` | Switch | Heating element control |
-| `switch.stagg_ekg_warming` | Switch | Warming mode control |
-| `binary_sensor.stagg_ekg_power` | Binary Sensor | Power on/off status |
-| `binary_sensor.stagg_ekg_low_water_warning` | Binary Sensor | Water detection alert |
+| `water_heater.fellow_kettle` | Water Heater | Main control interface |
+| `sensor.fellow_current_temperature` | Sensor | Real-time water temperature |
+| `sensor.fellow_target_temperature` | Sensor | Target temperature setting |
+| `sensor.fellow_mode` | Sensor | Operating mode (Off, Heat, Standby) |
+| `switch.fellow_heating` | Switch | Heating element control |
+| `switch.fellow_warming` | Switch | Warming mode control |
+| `binary_sensor.fellow_power` | Binary Sensor | Power on/off status |
+| `binary_sensor.fellow_low_water_warning` | Binary Sensor | Water detection alert |
 
 ## Installation
 
@@ -75,7 +75,7 @@ Works with all Fellow kettles that have the HTTP CLI interface.
 
 ### Manual Installation
 
-1. Download the `custom_components/stagg_ekg` folder
+1. Download the `custom_components/fellow` folder
 2. Copy it to your Home Assistant `config/custom_components/` directory
 3. Restart Home Assistant
 4. Add the integration via Settings → Devices & Services
@@ -122,7 +122,7 @@ The integration will sync the temperature unit with your kettle's LCD display.
 # Heat water to 95°C
 service: water_heater.turn_on
 target:
-  entity_id: water_heater.stagg_ekg_kettle
+  entity_id: water_heater.fellow_kettle
 data:
   temperature: 95
 ```
@@ -139,17 +139,17 @@ automation:
     condition:
       # Only if water detected
       - condition: state
-        entity_id: binary_sensor.stagg_ekg_low_water_warning
+        entity_id: binary_sensor.fellow_low_water_warning
         state: "off"
     action:
       - service: water_heater.set_temperature
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
         data:
           temperature: 95
       - service: water_heater.turn_on
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
 ```
 
 **Water Ready Notification**
@@ -159,11 +159,11 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ states('sensor.stagg_ekg_current_temperature')|float >=
-             states.water_heater.stagg_ekg_kettle.attributes.temperature|float - 2 }}
+          {{ states('sensor.fellow_current_temperature')|float >=
+             states.water_heater.fellow_kettle.attributes.temperature|float - 2 }}
     condition:
       - condition: state
-        entity_id: water_heater.stagg_ekg_kettle
+        entity_id: water_heater.fellow_kettle
         attribute: current_operation
         state: "heat"
     action:
@@ -181,31 +181,31 @@ script:
     sequence:
       - service: water_heater.set_temperature
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
         data:
           temperature: 75
       - service: water_heater.turn_on
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
 
   heat_black_tea:
     alias: "Heat for Black Tea"
     sequence:
       - service: water_heater.set_temperature
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
         data:
           temperature: 95
       - service: water_heater.turn_on
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
 ```
 
 ### Dashboard Card
 
 ```yaml
 type: thermostat
-entity: water_heater.stagg_ekg_kettle
+entity: water_heater.fellow_kettle
 name: Coffee Kettle
 ```
 

@@ -6,7 +6,7 @@
    ```bash
    cd /config  # Your Home Assistant config directory
    mkdir -p custom_components
-   cp -r /path/to/custom_components/stagg_ekg custom_components/
+   cp -r /path/to/custom_components/fellow custom_components/
    ```
 
 2. **Restart Home Assistant**
@@ -67,12 +67,12 @@ You can change the unit later:
 After setup, you should see:
 
 **Entities Created:**
-- `water_heater.stagg_ekg_kettle` - Main control
-- `sensor.stagg_ekg_current_temperature` - Current temp
-- `sensor.stagg_ekg_target_temperature` - Target temp
-- `sensor.stagg_ekg_mode` - Kettle mode
-- `switch.stagg_ekg_heating` - Heating control
-- `switch.stagg_ekg_warming` - Warming control
+- `water_heater.fellow_kettle` - Main control
+- `sensor.fellow_current_temperature` - Current temp
+- `sensor.fellow_target_temperature` - Target temp
+- `sensor.fellow_mode` - Kettle mode
+- `switch.fellow_heating` - Heating control
+- `switch.fellow_warming` - Warming control
 
 ## Troubleshooting
 
@@ -86,7 +86,7 @@ After setup, you should see:
 ### Entities not showing up
 1. Check the Home Assistant logs
 2. Go to Settings → System → Logs
-3. Search for "stagg_ekg"
+3. Search for "fellow"
 4. Look for error messages
 
 ### Temperature unit not changing
@@ -99,7 +99,7 @@ After setup, you should see:
 
 ### Custom Polling Interval
 
-Edit `custom_components/stagg_ekg/__init__.py`:
+Edit `custom_components/fellow/__init__.py`:
 
 ```python
 # Change this line (default is 30 seconds)
@@ -114,7 +114,7 @@ Add to `configuration.yaml`:
 logger:
   default: info
   logs:
-    custom_components.stagg_ekg: debug
+    custom_components.fellow: debug
 ```
 
 ## Uninstalling
@@ -123,7 +123,7 @@ logger:
 2. Find "Stagg EKG+"
 3. Click the three dots menu
 4. Select "Delete"
-5. Optionally, delete the `custom_components/stagg_ekg` folder
+5. Optionally, delete the `custom_components/fellow` folder
 6. Restart Home Assistant
 
 ## Support

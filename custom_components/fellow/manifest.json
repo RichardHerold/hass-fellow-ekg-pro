@@ -1,12 +1,12 @@
 {
-  "domain": "stagg_ekg",
+  "domain": "fellow",
   "name": "Fellow Stagg EKG+",
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/rderewianko/fellow-ekg",
-  "issue_tracker": "https://github.com/rderewianko/fellow-ekg/issues",
   "integration_type": "device",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/rderewianko/fellow-ekg/issues",
   "requirements": ["requests>=2.31.0"],
-  "version": "1.0.0"
+  "version": "2.0.0"
 }

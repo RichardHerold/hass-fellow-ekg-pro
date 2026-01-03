@@ -1,6 +1,6 @@
-"""Constants for the Stagg EKG integration."""
+"""Constants for the Fellow integration."""
 
-DOMAIN = "stagg_ekg"
+DOMAIN = "fellow"
 
 # Configuration
 CONF_TEMPERATURE_UNIT = "temperature_unit"

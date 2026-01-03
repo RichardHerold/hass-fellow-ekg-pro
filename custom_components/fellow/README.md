@@ -21,7 +21,7 @@ Control your Fellow Stagg EKG+ electric kettle from Home Assistant!
 
 ## Installation
 
-1. Copy the `custom_components/stagg_ekg` folder to your Home Assistant `custom_components` directory
+1. Copy the `custom_components/fellow` folder to your Home Assistant `custom_components` directory
 2. Restart Home Assistant
 3. Go to Configuration > Integrations
 4. Click the "+ ADD INTEGRATION" button
@@ -40,7 +40,7 @@ Add a water heater card to your dashboard:
 
 ```yaml
 type: thermostat
-entity: water_heater.stagg_ekg_kettle
+entity: water_heater.fellow_kettle
 ```
 
 ### Automation Example
@@ -56,12 +56,12 @@ automation:
     action:
       - service: water_heater.set_temperature
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
         data:
           temperature: 90
       - service: water_heater.turn_on
         target:
-          entity_id: water_heater.stagg_ekg_kettle
+          entity_id: water_heater.fellow_kettle
 ```
 
 ### Sensors in Lovelace
@@ -69,11 +69,11 @@ automation:
 ```yaml
 type: entities
 entities:
-  - entity: sensor.stagg_ekg_current_temperature
-  - entity: sensor.stagg_ekg_target_temperature
-  - entity: sensor.stagg_ekg_mode
-  - entity: switch.stagg_ekg_heating
-  - entity: switch.stagg_ekg_warming
+  - entity: sensor.fellow_current_temperature
+  - entity: sensor.fellow_target_temperature
+  - entity: sensor.fellow_mode
+  - entity: switch.fellow_heating
+  - entity: switch.fellow_warming
 ```
 
 ## Troubleshooting
