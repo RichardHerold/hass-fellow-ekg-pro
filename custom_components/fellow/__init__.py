@@ -71,18 +71,16 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=5),
         )
 
     async def _async_update_data(self):
         """Fetch data from API."""
         try:
             state = await self.hass.async_add_executor_job(self.client.get_state)
-            settings = await self.hass.async_add_executor_job(self.client.get_settings)
 
             return {
                 "state": state,
-                "settings": settings,
             }
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
