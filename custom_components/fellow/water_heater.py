@@ -30,7 +30,7 @@ MAX_TEMP_F = 212
 # Operation modes
 OPERATION_MODE_OFF = "off"
 OPERATION_MODE_HEAT = "heat"
-OPERATION_MODE_STANDBY = "standby"
+OPERATION_MODE_WARM = "warm"
 
 
 async def async_setup_entry(
@@ -52,7 +52,7 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
         | WaterHeaterEntityFeature.ON_OFF
         | WaterHeaterEntityFeature.OPERATION_MODE
     )
-    _attr_operation_list = [OPERATION_MODE_OFF, OPERATION_MODE_HEAT, OPERATION_MODE_STANDBY]
+    _attr_operation_list = [OPERATION_MODE_OFF, OPERATION_MODE_HEAT, OPERATION_MODE_WARM]
 
     def __init__(
         self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
@@ -112,22 +112,33 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
 
     @property
     def current_operation(self) -> str:
-        """Return current operation (off, heat, standby)."""
+        """Return current operation (off, heat, warm)."""
         if not self.coordinator.data or "state" not in self.coordinator.data:
             return OPERATION_MODE_OFF
 
         state = self.coordinator.data["state"]
-        mode = state.mode
 
-        if mode == "S_Off":
+        if state.is_off:
             return OPERATION_MODE_OFF
-        elif state.heating:
+        elif state.is_heating:
             return OPERATION_MODE_HEAT
+        elif state.warming or state.is_holding:
+            return OPERATION_MODE_WARM
         else:
-            return OPERATION_MODE_STANDBY
+            # S_Standby, S_HeatOff without warming = effectively off
+            return OPERATION_MODE_OFF
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra state attributes."""
+        if not self.coordinator.data or "state" not in self.coordinator.data:
+            return None
+        return {
+            "docked": self.coordinator.data["state"].is_docked,
+        }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
+        """Set new target temperature using batched dial rotation."""
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
@@ -138,52 +149,46 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
         else:
             temp_celsius = temperature
 
-        # Calculate steps needed to reach target temperature
-        current_state = self.coordinator.data["state"]
-        current_target = current_state.set_temp_c
-        temp_diff = temp_celsius - current_target
-
-        # Each dial step changes temperature by 0.5°C (value changes by 1 in "2C" format)
-        # Verified: 90 steps = 45°C change (from 40°C to 85°C)
-        steps = int(round(temp_diff * 2))
-
-        if steps > 0:
-            await self.hass.async_add_executor_job(
-                self.coordinator.client.rotate_dial_right, abs(steps)
-            )
-        elif steps < 0:
-            await self.hass.async_add_executor_job(
-                self.coordinator.client.rotate_dial_left, abs(steps)
-            )
+        # The kettle client handles batching, verification, and self-correction
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.set_temperature, temp_celsius
+        )
 
         await self.coordinator.async_request_refresh()
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
         """Set operation mode."""
         if operation_mode == OPERATION_MODE_OFF:
-            # Turn off and power down
-            await self.hass.async_add_executor_job(self.coordinator.client.stop_heating)
+            await self.hass.async_add_executor_job(
+                self.coordinator.client.stop_heating
+            )
+            await self.hass.async_add_executor_job(
+                self.coordinator.client.set_warming, False
+            )
         elif operation_mode == OPERATION_MODE_HEAT:
-            # Start heating (wakes screen and starts heating)
-            await self.hass.async_add_executor_job(self.coordinator.client.start_heating)
-        elif operation_mode == OPERATION_MODE_STANDBY:
-            # Power on screen but don't heat
-            await self.hass.async_add_executor_job(self.coordinator.client.power_on)
+            await self.hass.async_add_executor_job(
+                self.coordinator.client.start_heating
+            )
+        elif operation_mode == OPERATION_MODE_WARM:
+            await self.hass.async_add_executor_job(
+                self.coordinator.client.set_warming, True
+            )
 
         await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the kettle on and start heating."""
-        # Check if water might be low
-        if self.coordinator.data and "state" in self.coordinator.data:
-            state = self.coordinator.data["state"]
-            if state.may_have_no_water:
-                _LOGGER.warning("Kettle temperature very low (%s°C) - may not have water!", state.current_temp_c)
-
-        await self.hass.async_add_executor_job(self.coordinator.client.start_heating)
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.start_heating
+        )
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the kettle off."""
-        await self.hass.async_add_executor_job(self.coordinator.client.stop_heating)
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.stop_heating
+        )
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.set_warming, False
+        )
         await self.coordinator.async_request_refresh()

@@ -68,7 +68,7 @@ class StaggEKGHeatingSwitch(StaggEKGSwitchBase):
     def is_on(self) -> bool:
         """Return true if heating is on."""
         if self.coordinator.data and "state" in self.coordinator.data:
-            return self.coordinator.data["state"].heating
+            return self.coordinator.data["state"].is_heating
         return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -100,13 +100,12 @@ class StaggEKGWarmingSwitch(StaggEKGSwitchBase):
     def is_on(self) -> bool:
         """Return true if warming is on."""
         if self.coordinator.data and "state" in self.coordinator.data:
-            return self.coordinator.data["state"].warming
+            state = self.coordinator.data["state"]
+            return state.warming or state.is_holding
         return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn warming on."""
-        # Wake screen first if needed, then enable warming
-        await self.hass.async_add_executor_job(self.coordinator.client.power_on)
         await self.hass.async_add_executor_job(self.coordinator.client.warm_on)
         await self.coordinator.async_request_refresh()
 
