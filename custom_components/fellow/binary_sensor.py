@@ -25,6 +25,7 @@ async def async_setup_entry(
     entities = [
         StaggEKGPowerBinarySensor(coordinator, entry),
         StaggEKGWaterBinarySensor(coordinator, entry),
+        StaggEKGLiftedBinarySensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -84,6 +85,26 @@ class StaggEKGPowerBinarySensor(StaggEKGBinarySensorBase):
                 "in_menu": state.is_in_menu,
             }
         return {}
+
+
+class StaggEKGLiftedBinarySensor(StaggEKGBinarySensorBase):
+    """Binary sensor that fires when the kettle is taken off the base."""
+
+    _attr_device_class = BinarySensorDeviceClass.MOVING
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_lifted"
+        self._attr_name = "Lifted"
+        self._attr_icon = "mdi:kettle-pour-over"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if the kettle was recently lifted from the base."""
+        return self.coordinator.recently_lifted
 
 
 class StaggEKGWaterBinarySensor(StaggEKGBinarySensorBase):

@@ -1,9 +1,20 @@
 {
   "config": {
     "step": {
-      "user": {
+      "pick": {
+        "title": "Stagg EKG+ found on your network",
+        "description": "Select a discovered kettle, or choose 'Enter IP manually' to type the address yourself.",
+        "data": {
+          "host": "Kettle",
+          "temperature_unit": "Temperature Unit"
+        },
+        "data_description": {
+          "temperature_unit": "This will also update the kettle's display unit"
+        }
+      },
+      "manual": {
         "title": "Set up Stagg EKG+",
-        "description": "Enter the IP address of your Stagg EKG+ kettle and select your preferred temperature unit",
+        "description": "Enter the IP address of your Stagg EKG+ kettle and select your preferred temperature unit.",
         "data": {
           "host": "IP Address",
           "temperature_unit": "Temperature Unit"
@@ -27,10 +38,12 @@
         "title": "Stagg EKG+ Options",
         "description": "Configure your kettle settings",
         "data": {
-          "temperature_unit": "Temperature Unit"
+          "temperature_unit": "Temperature Unit",
+          "temp_set_method": "Temperature-setting method"
         },
         "data_description": {
-          "temperature_unit": "Changing this will update both Home Assistant and the kettle's display unit"
+          "temperature_unit": "Changing this will update both Home Assistant and the kettle's display unit",
+          "temp_set_method": "Direct uses a single firmware command (fast). Dial emulates the physical dial (slower but compatible with older firmwares)."
         }
       }
     }
@@ -40,6 +53,12 @@
       "options": {
         "celsius": "Celsius (°C)",
         "fahrenheit": "Fahrenheit (°F)"
+      }
+    },
+    "temp_set_method": {
+      "options": {
+        "direct": "Direct (recommended)",
+        "dial": "Dial emulation (fallback)"
       }
     }
   }

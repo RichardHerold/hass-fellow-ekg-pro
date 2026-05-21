@@ -1,6 +1,9 @@
 # Stagg EKG+ Python API - Usage Examples
 
-Complete examples for using the standalone Python API (`stagg_ekg_api.py`).
+Complete examples for using the standalone Python API in this directory
+(`stagg_ekg_api.py`). Run scripts from inside `examples/`, or add this
+directory to `PYTHONPATH`, so `from stagg_ekg_api import StaggEKGClient`
+resolves.
 
 ---
 

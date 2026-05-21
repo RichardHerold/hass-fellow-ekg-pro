@@ -211,7 +211,7 @@ name: Coffee Kettle
 
 ## Standalone Python API
 
-The repository includes a standalone Python API (`stagg_ekg_api.py`) for use outside Home Assistant.
+The repository includes a standalone Python API in [`examples/stagg_ekg_api.py`](examples/stagg_ekg_api.py) for use outside Home Assistant.
 
 ### Quick Start
 
@@ -229,7 +229,7 @@ state = kettle.get_state()
 print(f"Current: {state.current_temp_c}°C / Target: {state.set_temp_c}°C")
 ```
 
-See [PYTHON_API_EXAMPLES.md](PYTHON_API_EXAMPLES.md) for complete usage examples.
+See [examples/README.md](examples/README.md) for complete usage examples.
 
 ## Technical Details
 
