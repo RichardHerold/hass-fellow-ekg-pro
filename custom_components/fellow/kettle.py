@@ -19,6 +19,15 @@ MAX_TOTAL_STEPS = 150     # safety cap (full range is ~120 steps, plus margin)
 GUIDE_PRESETS_F = (180, 195, 200, 205, 212)
 
 
+class KettleTimeoutError(Exception):
+    """Raised when the kettle's HTTP server doesn't respond in time.
+
+    The kettle briefly stops answering HTTP requests when it transitions
+    to Off (and occasionally at other points), so callers can treat this
+    as a transient condition rather than a hard failure.
+    """
+
+
 @dataclass
 class KettleState:
     """Represents the current state of the kettle"""
@@ -89,17 +98,39 @@ class StaggEKGClient:
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'StaggEKG-HA/1.0'})
 
-    def _send_command(self, cmd: str) -> str:
-        """Send a CLI command to the kettle"""
+    def _send_command(self, cmd: str, retries: int = 2) -> str:
+        """Send a CLI command to the kettle, retrying on timeout.
+
+        The kettle's HTTP server goes unresponsive for several seconds
+        during mode transitions (especially when turning off), so a single
+        read timeout is not a reliable signal that anything is wrong.
+        Retries swallow that window; if the kettle is still unresponsive
+        after the final attempt, raise KettleTimeoutError so callers can
+        distinguish it from other request failures.
+        """
         url = f"{self.base_url}/cli"
         params = {"cmd": cmd}
 
-        try:
-            response = self.session.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            return response.text
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to send command '{cmd}': {e}")
+        last_timeout: Optional[Exception] = None
+        for attempt in range(retries + 1):
+            try:
+                response = self.session.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                return response.text
+            except requests.exceptions.Timeout as e:
+                last_timeout = e
+                if attempt < retries:
+                    _LOGGER.debug(
+                        "Kettle timeout on '%s' (attempt %d/%d), retrying",
+                        cmd, attempt + 1, retries + 1,
+                    )
+                    time.sleep(0.5)
+            except requests.exceptions.RequestException as e:
+                raise Exception(f"Failed to send command '{cmd}': {e}")
+
+        raise KettleTimeoutError(
+            f"Kettle did not respond to '{cmd}' after {retries + 1} attempts: {last_timeout}"
+        )
 
     def get_state(self) -> KettleState:
         """Get the current state of the kettle"""

@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
-from .kettle import StaggEKGClient
+from .kettle import KettleTimeoutError, StaggEKGClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,5 +82,13 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             return {
                 "state": state,
             }
+        except KettleTimeoutError as err:
+            # The kettle stops answering HTTP for a few seconds when it
+            # transitions to Off. Keep the last known state instead of
+            # surfacing an error every time that happens.
+            if self.data is not None:
+                _LOGGER.debug("Kettle unresponsive, keeping last state: %s", err)
+                return self.data
+            raise UpdateFailed(f"Kettle unresponsive: {err}")
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
