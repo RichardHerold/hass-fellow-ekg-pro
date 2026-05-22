@@ -13,14 +13,27 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN, CONF_TEMPERATURE_UNIT, UNIT_CELSIUS, UNIT_FAHRENHEIT
+from .const import (
+    CONF_TEMP_SET_METHOD,
+    CONF_TEMPERATURE_UNIT,
+    DOMAIN,
+    TEMP_METHOD_DIAL,
+    TEMP_METHOD_DIRECT,
+    UNIT_CELSIUS,
+    UNIT_FAHRENHEIT,
+)
+from .discovery import discover_kettles
 from .kettle import StaggEKGClient
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
+# Sentinel option in the discovery picker that means "skip the list and
+# enter an IP by hand."
+MANUAL_HOST_CHOICE = "manual"
+
+STEP_MANUAL_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default="10.1.1.177"): str,
+        vol.Required(CONF_HOST): str,
         vol.Required(CONF_TEMPERATURE_UNIT, default=UNIT_CELSIUS): vol.In(
             [UNIT_CELSIUS, UNIT_FAHRENHEIT]
         ),
@@ -51,10 +64,64 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize config flow state."""
+        self._discovered: list[str] = []
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
+        """Run discovery first, then route to the picker or manual entry."""
+        self._discovered = await discover_kettles(self.hass)
+        if self._discovered:
+            return await self.async_step_pick()
+        return await self.async_step_manual()
+
+    async def async_step_pick(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Let the user choose a discovered kettle or fall through to manual entry."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            choice = user_input[CONF_HOST]
+            if choice == MANUAL_HOST_CHOICE:
+                return await self.async_step_manual()
+            data = {
+                CONF_HOST: choice,
+                CONF_TEMPERATURE_UNIT: user_input[CONF_TEMPERATURE_UNIT],
+            }
+            try:
+                info = await validate_input(self.hass, data)
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+            else:
+                return self.async_create_entry(title=info["title"], data=data)
+
+        host_options = {ip: ip for ip in self._discovered}
+        host_options[MANUAL_HOST_CHOICE] = "Enter IP manually"
+
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=self._discovered[0]): vol.In(
+                        host_options
+                    ),
+                    vol.Required(
+                        CONF_TEMPERATURE_UNIT, default=UNIT_CELSIUS
+                    ): vol.In([UNIT_CELSIUS, UNIT_FAHRENHEIT]),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manual host entry (used when discovery finds nothing or user opts out)."""
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
@@ -68,7 +135,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id="manual", data_schema=STEP_MANUAL_DATA_SCHEMA, errors=errors
         )
 
     @staticmethod
@@ -109,6 +176,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
 
         current_unit = self.config_entry.data.get(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
+        current_method = self.config_entry.data.get(
+            CONF_TEMP_SET_METHOD, TEMP_METHOD_DIRECT
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -118,6 +188,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_TEMPERATURE_UNIT,
                         default=current_unit
                     ): vol.In([UNIT_CELSIUS, UNIT_FAHRENHEIT]),
+                    vol.Required(
+                        CONF_TEMP_SET_METHOD,
+                        default=current_method,
+                    ): vol.In([TEMP_METHOD_DIRECT, TEMP_METHOD_DIAL]),
                 }
             ),
         )

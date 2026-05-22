@@ -19,13 +19,21 @@ MAX_TOTAL_STEPS = 150     # safety cap (full range is ~120 steps, plus margin)
 GUIDE_PRESETS_F = (180, 195, 200, 205, 212)
 
 
-class KettleTimeoutError(Exception):
-    """Raised when the kettle's HTTP server doesn't respond in time.
+class KettleTransientError(Exception):
+    """Base class for transient kettle failures the caller can ride out.
 
-    The kettle briefly stops answering HTTP requests when it transitions
-    to Off (and occasionally at other points), so callers can treat this
-    as a transient condition rather than a hard failure.
+    The kettle briefly stops answering HTTP (or returns truncated data)
+    when it transitions to Off and at other moments. Callers can treat
+    any subclass as a non-fatal hiccup and keep their last known state.
     """
+
+
+class KettleTimeoutError(KettleTransientError):
+    """Raised when the kettle's HTTP server doesn't respond in time."""
+
+
+class KettleResponseError(KettleTransientError):
+    """Raised when the kettle's response can't be parsed (missing fields)."""
 
 
 @dataclass
@@ -92,21 +100,34 @@ class KettleState:
 class StaggEKGClient:
     """Client for interacting with Stagg EKG+ kettle"""
 
-    def __init__(self, host: str = "10.1.1.177", port: int = 80):
-        """Initialize the client"""
+    def __init__(
+        self,
+        host: str = "10.1.1.177",
+        port: int = 80,
+        temp_method: str = "direct",
+    ):
+        """Initialize the client.
+
+        temp_method controls how `set_temperature` reaches the target:
+          - "direct": single `setsetting settempr <F>` firmware call (fast)
+          - "dial":   emulate physical dial (works on older/quirky firmwares)
+        """
         self.base_url = f"http://{host}:{port}"
+        self.temp_method = temp_method
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'StaggEKG-HA/1.0'})
 
-    def _send_command(self, cmd: str, retries: int = 2) -> str:
+    def _send_command(self, cmd: str, retries: int = 1, timeout: float = 5.0) -> str:
         """Send a CLI command to the kettle, retrying on timeout.
 
         The kettle's HTTP server goes unresponsive for several seconds
         during mode transitions (especially when turning off), so a single
         read timeout is not a reliable signal that anything is wrong.
-        Retries swallow that window; if the kettle is still unresponsive
-        after the final attempt, raise KettleTimeoutError so callers can
-        distinguish it from other request failures.
+        Worst-case wall time with the defaults is ~10.5s (2 × 5s + 0.5s
+        backoff) — short enough that the coordinator's 5s poll won't pile
+        up too far behind. If the kettle is still unresponsive after the
+        final attempt, raise KettleTimeoutError so callers can distinguish
+        it from other request failures.
         """
         url = f"{self.base_url}/cli"
         params = {"cmd": cmd}
@@ -114,7 +135,7 @@ class StaggEKGClient:
         last_timeout: Optional[Exception] = None
         for attempt in range(retries + 1):
             try:
-                response = self.session.get(url, params=params, timeout=10)
+                response = self.session.get(url, params=params, timeout=timeout)
                 response.raise_for_status()
                 return response.text
             except requests.exceptions.Timeout as e:
@@ -138,6 +159,16 @@ class StaggEKGClient:
 
         # Parse the response
         mode_match = re.search(r'mode=(\S+)', response)
+        if not mode_match:
+            # Treat a malformed response the same as a transient timeout —
+            # the kettle occasionally returns truncated data and there's no
+            # safe default for `mode` (returning "Unknown" silently flips
+            # is_off/is_heating to False, which downstream entities then
+            # show as a real state change).
+            raise KettleResponseError(
+                f"Kettle response missing 'mode' field: {response!r}"
+            )
+
         screen_match = re.search(r'scrname=(.+?)(?:\n|$)', response)
         # tempr = current water temperature
         # temprT = target temperature (set via dial)
@@ -150,7 +181,7 @@ class StaggEKGClient:
         warming_match = re.search(r'wd\s+(\d+)', response)
 
         return KettleState(
-            mode=mode_match.group(1) if mode_match else "Unknown",
+            mode=mode_match.group(1),
             screen_name=screen_match.group(1).strip() if screen_match else None,
             current_temp_c=float(temp_c_match.group(1)) if temp_c_match else None,
             set_temp_c=float(temp_set_c_match.group(1)) if temp_set_c_match else 0,
@@ -186,27 +217,25 @@ class StaggEKGClient:
         return self._send_command("2")
 
     def start_heating(self) -> str:
-        """
-        Start a heating cycle.
+        """Start a heating cycle via direct state command.
 
-        State-aware: only sends the wake/heat command if the kettle isn't
-        already heating. This avoids the button-2 toggle problem where
-        pressing it while heating would stop it.
+        `ss S_Heat` tells the firmware to enter the Heat state from any
+        starting state, so we don't need to wake the kettle first or worry
+        about the button-2 toggle behavior. We still skip the command if
+        the kettle is already heating to avoid unnecessary chatter.
         """
         state = self.get_state()
         if state.is_heating:
             _LOGGER.debug("Kettle already heating, skipping start command")
             return "already heating"
-        # Button 2 wakes the kettle (if off) and starts heating
-        return self._send_command("2")
+        return self._send_command("ss S_Heat")
 
     def stop_heating(self, max_attempts: int = 3) -> str:
-        """
-        Stop heating or holding by telling the firmware to exit.
+        """Stop heating or holding via direct state command.
 
-        Uses button 2 (the same way a human would cancel) rather than
-        direct GPIO commands, so the firmware state machine stays
-        consistent. Verifies the kettle actually stopped after each attempt.
+        `ss S_Off` puts the firmware in the Off state directly. We retry
+        and verify because some firmware revisions occasionally drop the
+        first command during a state transition.
         """
         for attempt in range(max_attempts):
             state = self.get_state()
@@ -217,7 +246,7 @@ class StaggEKGClient:
                 "Sending stop command (attempt %d/%d, mode=%s)",
                 attempt + 1, max_attempts, state.mode,
             )
-            self._send_command("2")
+            self._send_command("ss S_Off")
             time.sleep(0.5)
 
         # Final check
@@ -293,6 +322,9 @@ class StaggEKGClient:
         target_celsius = max(40.0, min(100.0, target_celsius))
         target_f = round(target_celsius * 9 / 5 + 32)
 
+        if self.temp_method == "direct":
+            return self._set_temperature_direct(target_f)
+
         guide_on = self.get_guide_mode()
         preset_index = (
             GUIDE_PRESETS_F.index(target_f)
@@ -304,6 +336,39 @@ class StaggEKGClient:
             return self._set_temperature_preset(preset_index, target_f)
 
         return self._set_temperature_dial(target_celsius, guide_on)
+
+    def _set_temperature_direct(self, target_f: int) -> float:
+        """Set target temperature via direct firmware command.
+
+        Sends `setsetting settempr <F>` and reads back the actual target
+        to confirm. Falls back to the dial-rotation method if the kettle
+        doesn't accept the command (older firmwares may not implement it).
+        """
+        self._send_command(f"setsetting settempr {target_f}")
+        time.sleep(SETTLE_DELAY)
+        state = self.get_state()
+
+        # Verify: kettle should now report the requested target (within
+        # the precision of its display: 1F or 0.5C). If it didn't change,
+        # the firmware likely doesn't accept this command — fall back.
+        actual_f = round(state.set_temp_c * 9 / 5 + 32)
+        if abs(actual_f - target_f) > 1:
+            _LOGGER.warning(
+                "Direct settempr appears unsupported (asked %dF, got %dF); "
+                "falling back to dial rotation. Switch this device to the "
+                "'dial' temperature-setting method in options to skip this "
+                "probe in the future.",
+                target_f, actual_f,
+            )
+            target_celsius = (target_f - 32) * 5 / 9
+            guide_on = self.get_guide_mode()
+            return self._set_temperature_dial(target_celsius, guide_on)
+
+        _LOGGER.debug(
+            "Direct settempr set %dF (%.1fC), actual=%.1fC",
+            target_f, (target_f - 32) * 5 / 9, state.set_temp_c,
+        )
+        return state.set_temp_c
 
     def _set_temperature_preset(self, preset_index: int, target_f: int) -> float:
         """Navigate to a guide mode preset by index."""

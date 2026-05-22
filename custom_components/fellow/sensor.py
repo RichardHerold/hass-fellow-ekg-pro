@@ -112,7 +112,14 @@ class StaggEKGModeSensor(StaggEKGSensorBase):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_mode"
         self._attr_name = "Mode"
-        self._attr_icon = "mdi:kettle"
+
+    @property
+    def icon(self) -> str:
+        """Steam the kettle icon while it's actively heating."""
+        if self.coordinator.data and "state" in self.coordinator.data:
+            if self.coordinator.data["state"].is_heating:
+                return "mdi:kettle-steam"
+        return "mdi:kettle"
 
     @property
     def native_value(self) -> str | None:

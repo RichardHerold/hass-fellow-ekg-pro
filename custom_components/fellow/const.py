@@ -4,10 +4,17 @@ DOMAIN = "fellow"
 
 # Configuration
 CONF_TEMPERATURE_UNIT = "temperature_unit"
+CONF_TEMP_SET_METHOD = "temp_set_method"
 
 # Temperature units (matches kettle's internal values)
 UNIT_CELSIUS = "celsius"
 UNIT_FAHRENHEIT = "fahrenheit"
+
+# Temperature-setting methods
+# - direct: single `setsetting settempr <F>` firmware command (fast, preferred)
+# - dial:   emulate physical dial via left/right step commands (compatible fallback)
+TEMP_METHOD_DIRECT = "direct"
+TEMP_METHOD_DIAL = "dial"
 
 # Temperature limits (verified from kettle hardware)
 MIN_TEMP_C = 40  # Minimum kettle can be set to
