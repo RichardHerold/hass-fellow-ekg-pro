@@ -66,8 +66,11 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
         self._attr_has_entity_name = True
         self._attr_device_info = coordinator.device_info
 
-        # Set temperature unit based on configuration
-        configured_unit = entry.data.get(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
+        # Set temperature unit based on configuration (options take
+        # precedence so changes apply on reload without re-adding).
+        configured_unit = entry.options.get(
+            CONF_TEMPERATURE_UNIT, entry.data.get(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
+        )
         if configured_unit == UNIT_FAHRENHEIT:
             self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
             self._attr_min_temp = MIN_TEMP_F

@@ -1,26 +1,28 @@
 {
   "config": {
     "step": {
+      "user": {
+        "title": "Set up Fellow Stagg EKG",
+        "description": "Add your kettle by entering its IP address (find it in your router's client list), or scan the local network for kettles.",
+        "menu_options": {
+          "manual": "Enter IP address",
+          "pick": "Scan network"
+        }
+      },
       "pick": {
-        "title": "Stagg EKG+ found on your network",
-        "description": "Select a discovered kettle, or choose 'Enter IP manually' to type the address yourself.",
+        "title": "Kettles found on your network",
+        "description": "Select a discovered kettle.",
         "data": {
           "host": "Kettle",
           "temperature_unit": "Temperature Unit"
-        },
-        "data_description": {
-          "temperature_unit": "This will also update the kettle's display unit"
         }
       },
       "manual": {
-        "title": "Set up Stagg EKG+",
-        "description": "Enter the IP address of your Stagg EKG+ kettle and select your preferred temperature unit.",
+        "title": "Set up Fellow Stagg EKG",
+        "description": "Enter the IP address of your kettle and select your preferred temperature unit for Home Assistant.",
         "data": {
           "host": "IP Address",
           "temperature_unit": "Temperature Unit"
-        },
-        "data_description": {
-          "temperature_unit": "This will also update the kettle's display unit"
         }
       }
     },
@@ -35,15 +37,19 @@
   "options": {
     "step": {
       "init": {
-        "title": "Stagg EKG+ Options",
+        "title": "Fellow Stagg EKG Options",
         "description": "Configure your kettle settings",
         "data": {
           "temperature_unit": "Temperature Unit",
-          "temp_set_method": "Temperature-setting method"
+          "temp_set_method": "Temperature-setting method",
+          "poll_interval": "Poll interval (seconds)",
+          "sync_kettle_units": "Sync unit to the kettle's display"
         },
         "data_description": {
-          "temperature_unit": "Changing this will update both Home Assistant and the kettle's display unit",
-          "temp_set_method": "Direct uses a single firmware command (fast). Dial emulates the physical dial (slower but compatible with older firmwares)."
+          "temperature_unit": "The unit Home Assistant uses for this kettle",
+          "temp_set_method": "Direct uses firmware set-target commands with verification (fast). Dial emulates the physical dial (slower but works on firmwares without a set-target command).",
+          "poll_interval": "How often to read the kettle's state (5-60 seconds)",
+          "sync_kettle_units": "When enabled, changing the temperature unit here also changes the unit shown on the kettle's own display"
         }
       }
     }
