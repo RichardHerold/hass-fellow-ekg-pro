@@ -15,7 +15,23 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
-## [1.1.1] - 2026-08-31
+## [1.2.0] - 2026-08-31
+
+User-action release: the things a person actually wants to do with a kettle
+in Home Assistant, plus two fixes from real EKG Pro testing.
+
+### Added
+- **`fellow.heat_to` action**: set the target temperature and start
+  heating in one service call (targets the water heater entity; the
+  temperature is in your configured unit). The call automations, voice
+  assistants, and dashboards actually want.
+- **Preset buttons**: a built-in Boil button, plus your own one-tap
+  presets configured in the options as `Name: temperature` pairs (e.g.
+  `Pour-over: 96, Green tea: 79`). Pressing one sets the target and
+  starts heating.
+- **Water Ready binary sensor**: turns on when an active heat/hold cycle
+  reaches its target (within 1 °C), so "notify me when the water is
+  ready" is a two-line automation instead of a template comparison.
 
 ### Fixed
 - **Turning the kettle off no longer fails when it's too busy to answer a

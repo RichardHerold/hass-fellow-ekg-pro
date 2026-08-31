@@ -20,12 +20,14 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 
 | Entity | Type | Purpose |
 |--------|------|---------|
-| Kettle | Water Heater | Main control: target temperature, off/heat/warm |
+| Kettle | Water Heater | Main control: target temperature, off/heat/warm; supports the `fellow.heat_to` action |
+| Boil / your presets | Buttons | One tap: set target and start heating (presets configurable in options) |
+| Water Ready | Binary Sensor | On while an active cycle is at target — trigger "ready" notifications on it |
 | Current Temperature | Sensor | Real-time water temperature |
 | Target Temperature | Sensor | Target temperature setting |
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
-| Heating | Switch | Start/stop a heating cycle |
-| Warming | Switch | Keep-warm (Hold mode) |
+| Heating | Switch | Start/stop a heating cycle (heats to target, then off) |
+| Warming | Switch | Keep-warm (Hold mode: heats to target and stays there) |
 | Power | Binary Sensor | Power on/off status |
 | Boil Threshold | Sensor (diagnostic, disabled by default) | Altitude-adjusted boil point reported by the kettle |
 | Low Water Warning | Binary Sensor (diagnostic, disabled by default) | The firmware's `nw` status flag — meaning not yet verified on all models |
@@ -78,14 +80,17 @@ Setup only succeeds when the kettle both **answers and is understood**: validati
 
 ## Usage
 
+**Heat to a temperature in one action** — `fellow.heat_to` sets the target and starts heating:
+
 ```yaml
-# Heat water to 95°C
-service: water_heater.set_temperature
+service: fellow.heat_to
 target:
   entity_id: water_heater.fellow_kettle
 data:
   temperature: 95
 ```
+
+**One-tap presets** — a Boil button is built in, and you can add your own in the integration's options (`Pour-over: 96, Green tea: 79`); each becomes a button entity for dashboards and voice.
 
 **Morning Coffee**
 ```yaml
@@ -95,14 +100,26 @@ automation:
       platform: time
       at: "07:00:00"
     action:
-      - service: water_heater.set_temperature
+      - service: fellow.heat_to
         target:
           entity_id: water_heater.fellow_kettle
         data:
           temperature: 95
-      - service: water_heater.turn_on
-        target:
-          entity_id: water_heater.fellow_kettle
+```
+
+**Notify when the water is ready** — trigger on the Water Ready sensor:
+```yaml
+automation:
+  - alias: "Water ready"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.fellow_water_ready
+        to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "☕ Kettle"
+          message: "Water is at temperature"
 ```
 
 **Dashboard Card**

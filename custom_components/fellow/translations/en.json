@@ -53,15 +53,20 @@
           "temperature_unit": "Temperature Unit",
           "temp_set_method": "Temperature-setting method",
           "poll_interval": "Poll interval (seconds)",
-          "sync_kettle_units": "Sync unit to the kettle's display"
+          "sync_kettle_units": "Sync unit to the kettle's display",
+          "presets": "Temperature presets"
         },
         "data_description": {
           "temperature_unit": "The unit Home Assistant uses for this kettle",
           "temp_set_method": "Direct uses firmware set-target commands with verification (fast). Dial emulates the physical dial (slower but works on firmwares without a set-target command).",
           "poll_interval": "How often to read the kettle's state (5-60 seconds)",
-          "sync_kettle_units": "When enabled, changing the temperature unit here also changes the unit shown on the kettle's own display"
+          "sync_kettle_units": "When enabled, changing the temperature unit here also changes the unit shown on the kettle's own display",
+          "presets": "One-tap heat buttons as 'Name: temperature' pairs separated by commas, in your configured unit — e.g. 'Pour-over: 96, Green tea: 79'. A Boil button is always included."
         }
       }
+    },
+    "error": {
+      "invalid_presets": "Presets must be 'Name: temperature' pairs separated by commas, within 40-100 °C (104-212 °F), with unique names — e.g. 'Pour-over: 96, Green tea: 79'."
     }
   },
   "selector": {
