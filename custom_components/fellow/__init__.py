@@ -69,6 +69,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
+    # Positive confirmation in the log that the kettle was reached AND
+    # understood — the counterpart of the config flow's strict validation.
+    if coordinator.data and "state" in coordinator.data:
+        state = coordinator.data["state"]
+        _LOGGER.info(
+            "Fellow kettle at %s is up: mode=%s current=%s°C target=%s°C "
+            "firmware=%s mac=%s",
+            host,
+            state.mode,
+            state.current_temp_c,
+            state.target_temp_c,
+            fw_info.get("version", "unknown"),
+            mac or "unknown",
+        )
+
     # Store coordinator
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator

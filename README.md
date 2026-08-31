@@ -67,6 +67,8 @@ The kettle joins your WiFi via the Fellow app. Find its IP in your router's DHCP
 
 Setup does **not** change anything on the kettle itself.
 
+Setup only succeeds when the kettle both **answers and is understood**: validation requires usable current and target temperatures, not just a reply. If the kettle responds but its format can't be parsed, setup stops with an "incomplete response" error and the raw response is written to the Home Assistant log — no silent false-positive setups. After a successful setup, the log contains a confirmation line: `Fellow kettle at <ip> is up: mode=… current=… target=… firmware=…`.
+
 ### Options (Settings → Devices & Services → Fellow → Configure)
 
 - **Temperature unit** — the unit Home Assistant uses

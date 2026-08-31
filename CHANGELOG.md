@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-08-31
+
+### Changed
+- **Setup can no longer succeed on a response it doesn't understand.**
+  The config flow previously only checked that the kettle answered with a
+  `mode=` field, so a kettle whose firmware formats responses differently
+  produced a false-positive success with broken temperature entities.
+  Validation now requires usable current and target temperatures; when the
+  kettle answers but parsing is incomplete, setup stops with a dedicated
+  "incomplete response" error and logs the raw response (at warning level,
+  no debug logging needed) together with what did and didn't parse.
+- Successful setup now logs a positive confirmation line at info level
+  (`Fellow kettle at <ip> is up: mode=… current=… target=… firmware=…`),
+  so you can verify from the Home Assistant log that the kettle was both
+  reached and understood.
+
 ## [3.0.0] - 2026-08-31
 
 Reliability rework targeting the Stagg EKG Pro, whose firmware formats
