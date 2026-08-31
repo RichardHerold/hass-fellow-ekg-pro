@@ -2,6 +2,9 @@
 
 DOMAIN = "fellow"
 
+# Where the update entity looks for new releases
+GITHUB_REPO = "RichardHerold/hass-fellow-ekg-pro"
+
 # Configuration
 CONF_TEMPERATURE_UNIT = "temperature_unit"
 CONF_TEMP_SET_METHOD = "temp_set_method"
