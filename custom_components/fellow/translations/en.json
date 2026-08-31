@@ -10,7 +10,14 @@
         }
       },
       "pick": {
-        "title": "Kettles found on your network",
+        "title": "Scan for kettles",
+        "description": "Choose which network to scan. The field is prefilled with a network Home Assistant is connected to — if your kettle is on a different subnet or an IoT VLAN, enter that network instead (e.g. 192.168.20.0/24, or just an IP on it to scan its /24). Scanning another VLAN only works if your firewall lets Home Assistant reach it over HTTP.",
+        "data": {
+          "network": "Network to scan"
+        }
+      },
+      "pick_device": {
+        "title": "Kettles found",
         "description": "Select a discovered kettle.",
         "data": {
           "host": "Kettle",
@@ -28,6 +35,8 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the kettle. Please check the IP address and ensure the kettle is powered on and connected to your network.",
+      "invalid_network": "Enter a network like 192.168.20.0/24 (no larger than /22) or an IP address on it.",
+      "no_kettles_found": "No kettle answered on that network. Check that you scanned the subnet the kettle is on (see your router's client list), or go back and add it by IP address instead.",
       "incomplete_response": "The kettle answered, but its response could not be fully understood, so setup was stopped (the temperature entities would not work). Make sure the kettle is sitting on its base and try again. If it keeps failing, check the Home Assistant log for the raw response and run examples/probe_kettle.py — your firmware may format responses differently.",
       "unknown": "Unexpected error occurred"
     },

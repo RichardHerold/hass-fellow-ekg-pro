@@ -28,9 +28,11 @@ from .const import (
     UNIT_CELSIUS,
     UNIT_FAHRENHEIT,
 )
-from .discovery import discover_kettles
+from .discovery import default_scan_networks, discover_kettles, parse_scan_network
 from .kettle import StaggEKGClient
 from .parser import state_problems
+
+CONF_NETWORK = "network"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,7 +145,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_pick(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Scan the network and let the user choose a discovered kettle."""
+        """Ask which network to scan, then run the scan.
+
+        The kettle often lives on a different subnet or IoT VLAN than Home
+        Assistant, where a scan of HA's own network can never find it — so
+        the user chooses the network, prefilled with HA's detected subnets.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                network = parse_scan_network(user_input[CONF_NETWORK])
+            except ValueError:
+                errors["base"] = "invalid_network"
+            else:
+                self._discovered = await discover_kettles(self.hass, network)
+                if self._discovered:
+                    return await self.async_step_pick_device()
+                errors["base"] = "no_kettles_found"
+
+        default_network = ""
+        if user_input is not None:
+            default_network = user_input[CONF_NETWORK]
+        else:
+            defaults = await default_scan_networks(self.hass)
+            if defaults:
+                default_network = defaults[0]
+
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_NETWORK, default=default_network): str}
+            ),
+            errors=errors,
+        )
+
+    async def async_step_pick_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Let the user choose one of the kettles the scan found."""
         errors: dict[str, str] = {}
         if user_input is not None:
             data = {
@@ -153,15 +192,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             result = await self._async_validate_and_create(data, errors)
             if result is not None:
                 return result
-        else:
-            # Only scan when the user explicitly chose this path — the scan
-            # probes every host on the local /24.
-            self._discovered = await discover_kettles(self.hass)
-            if not self._discovered:
-                return await self.async_step_manual()
 
         return self.async_show_form(
-            step_id="pick",
+            step_id="pick_device",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_HOST, default=self._discovered[0]): vol.In(
