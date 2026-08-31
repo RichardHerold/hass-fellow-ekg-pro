@@ -2,6 +2,17 @@
 """
 Stagg EKG+ Kettle API Client
 Control your Fellow Stagg EKG+ kettle via HTTP CLI interface
+
+WARNING: this talks to an undocumented firmware debug CLI. Some commands
+are dangerous:
+  - NEVER send a bare "ss" (no argument): it reboots the kettle.
+  - NEVER send "adcsamples": it crashes the firmware.
+  - "reset" reboots the device; it is intentionally not wrapped here.
+  - heat_on()/heat_off() drive the heater element GPIO directly,
+    bypassing the firmware state machine and its safety logic.
+
+For capturing your kettle's raw output to debug the Home Assistant
+integration, prefer examples/probe_kettle.py (read-only, stdlib-only).
 """
 
 import requests
@@ -146,11 +157,15 @@ class StaggEKGClient:
         return settings
 
     def heat_on(self) -> str:
-        """Turn heating on"""
+        """Turn the heater element on directly.
+
+        WARNING: bypasses the firmware state machine and its safety logic
+        (the display won't reflect it). Prefer start_heating().
+        """
         return self._send_command("heaton")
 
     def heat_off(self) -> str:
-        """Turn heating off"""
+        """Turn the heater element off directly (counterpart of heat_on)."""
         return self._send_command("heatoff")
 
     def warm_on(self) -> str:
@@ -287,10 +302,6 @@ class StaggEKGClient:
         """Refresh the GUI display"""
         return self._send_command("refresh")
 
-    def reset(self) -> str:
-        """Reset the kettle (WARNING: This will reboot the device)"""
-        return self._send_command("reset")
-
     def set_temperature(self, target_celsius: float) -> str:
         """
         Set target temperature by rotating the dial.
@@ -376,6 +387,10 @@ class StaggEKGClient:
         Returns:
             Raw response from kettle
         """
+        if cmd.strip() in ("ss", "adcsamples", "reset"):
+            raise ValueError(
+                f"Refusing to send {cmd.strip()!r}: it reboots or crashes the kettle"
+            )
         return self._send_command(cmd)
 
 

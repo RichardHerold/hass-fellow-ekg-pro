@@ -3,56 +3,36 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![License: Unlicense](https://img.shields.io/badge/License-Unlicense-blue.svg)](http://unlicense.org/)
 
-A complete Home Assistant custom integration for Fellow EKG electric kettles (Stagg EKG, Stagg EKG+, Stagg EKG Pro, and Corvo EKG) with temperature control, automation support, and real-time monitoring.
+A Home Assistant custom integration for Fellow Stagg EKG WiFi kettles (Stagg EKG+ and Stagg EKG Pro) with temperature control, automation support, and real-time monitoring — entirely over the local network, no cloud.
 
-Works with all Fellow kettles that have the HTTP CLI interface.
-
+It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`). The command set and response parsing cover both the Stagg EKG+ (firmware 1.1.76SSP) and the Stagg EKG Pro, whose firmware formats responses differently and uses a different set-temperature command (`setsettingd settempr`, as documented by the [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro) reverse-engineering effort). Response parsing is tolerant of both formats, and every state read is logged at debug level so format differences on other firmwares are easy to capture and fix.
 
 ## Features
 
-✨ **Complete Control**
-- Turn kettle on/off from Home Assistant
-- Set target temperature (40-100°C / 104-212°F)
-- Monitor current water temperature in real-time
-- View operating mode and heating status
-
-🌡️ **Temperature Management**
-- Choose between Celsius or Fahrenheit
-- Syncs with kettle's LCD display
-- Precise 0.5°C temperature steps
-- Automatic temperature validation
-
-🔒 **Safety Features**
-- Low water detection warning
-- Automatic power management
-- Temperature range limits
-- Safe heating cycle control
-
-🤖 **Home Assistant Integration**
-- 8 entities for complete control
-- Water heater entity for climate integration
-- Binary sensors for status monitoring
-- Switches for direct control
-- Full automation support
-
-📡 **Local Control**
-- No cloud connection required
-- Works entirely on local network
-- Fast response times
-- Standalone Python API included
+- Turn the kettle on/off and start keep-warm (Hold) from Home Assistant
+- Set the target temperature (40–100°C / 104–212°F) with read-back verification, falling back to dial emulation on firmwares without a working set-target command
+- Monitor current water temperature, target, mode, and heating status
+- Real device info (firmware version, MAC) read from the kettle
+- Built-in diagnostics: download a bundle with the raw firmware responses from Settings → Devices & Services
+- Local polling (default every 10 seconds, configurable 5–60)
 
 ## Entities
 
 | Entity | Type | Purpose |
 |--------|------|---------|
-| `water_heater.fellow_kettle` | Water Heater | Main control interface |
-| `sensor.fellow_current_temperature` | Sensor | Real-time water temperature |
-| `sensor.fellow_target_temperature` | Sensor | Target temperature setting |
-| `sensor.fellow_mode` | Sensor | Operating mode (Off, Heat, Standby) |
-| `switch.fellow_heating` | Switch | Heating element control |
-| `switch.fellow_warming` | Switch | Warming mode control |
-| `binary_sensor.fellow_power` | Binary Sensor | Power on/off status |
-| `binary_sensor.fellow_low_water_warning` | Binary Sensor | Water detection alert |
+| Kettle | Water Heater | Main control: target temperature, off/heat/warm |
+| Current Temperature | Sensor | Real-time water temperature |
+| Target Temperature | Sensor | Target temperature setting |
+| Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
+| Heating | Switch | Start/stop a heating cycle |
+| Warming | Switch | Keep-warm (Hold mode) |
+| Power | Binary Sensor | Power on/off status |
+| Boil Threshold | Sensor (diagnostic, disabled by default) | Altitude-adjusted boil point reported by the kettle |
+| Low Water Warning | Binary Sensor (diagnostic, disabled by default) | The firmware's `nw` status flag — meaning not yet verified on all models |
+| Lifted | Binary Sensor (disabled by default) | Inferred from the temperature reading disappearing |
+| Heater Element (Direct) | Switch (disabled by default) | **Advanced:** raw `heaton`/`heatoff` GPIO control, bypassing the firmware state machine |
+
+The disabled-by-default entities can be enabled per-entity in Settings → Devices & Services → Fellow → entities.
 
 ## Installation
 
@@ -63,71 +43,47 @@ Works with all Fellow kettles that have the HTTP CLI interface.
    - Go to HACS → Integrations
    - Click the three dots in the top right
    - Select "Custom repositories"
-   - Add repository URL: `https://github.com/rderewianko/fellow-ekg`
-   - Category: Integration
-3. Click "Install" on the Stagg EKG+ integration
-4. Restart Home Assistant
-5. Add the integration:
-   - Go to Settings → Devices & Services → Add Integration
-   - Search for "Fellow Stagg EKG+"
-   - Enter your kettle's IP address
-   - Choose temperature unit (Celsius or Fahrenheit)
+   - Add this repository's URL, category: Integration
+3. Install the integration and restart Home Assistant
+4. Add it via Settings → Devices & Services → Add Integration → "Fellow"
 
 ### Manual Installation
 
-1. Download the `custom_components/fellow` folder
-2. Copy it to your Home Assistant `config/custom_components/` directory
-3. Restart Home Assistant
-4. Add the integration via Settings → Devices & Services
+1. Copy `custom_components/fellow` into your Home Assistant `config/custom_components/` directory
+2. Restart Home Assistant
+3. Add the integration via Settings → Devices & Services
 
 ## Configuration
 
 ### Finding Your Kettle's IP Address
 
-The kettle connects to your WiFi network. Find its IP address:
-
-1. Check your router's DHCP client list
-2. Look for a device named:
-   - "Stagg EKG" or "Fellow"
-   - "espressif" (the ESP32 manufacturer)
-   - May include part of the MAC address (e.g., "espressif 16:b0")
-3. Note the IP address (e.g., `192.168.1.100`)
-
-**Tip:** Set a static IP or DHCP reservation for your kettle to prevent the address from changing.
+The kettle joins your WiFi via the Fellow app. Find its IP in your router's DHCP client list — look for "Stagg", "Fellow", or "espressif" (the ESP32 manufacturer). Give it a DHCP reservation so the address doesn't change.
 
 ### Setup
 
-1. Go to Settings → Devices & Services → Add Integration
-2. Search for "Fellow Stagg EKG+"
-3. Enter configuration:
-   - **Host:** Your kettle's IP address
-   - **Temperature Unit:** Choose Celsius or Fahrenheit
-4. Click Submit
+1. Settings → Devices & Services → Add Integration → "Fellow"
+2. Choose **Enter IP address** (recommended) and type the kettle's IP, or **Scan network** to probe the local /24 for kettles
+3. Pick your preferred temperature unit for Home Assistant
 
-The integration will sync the temperature unit with your kettle's LCD display.
+Setup does **not** change anything on the kettle itself.
 
-### Changing Temperature Units
+### Options (Settings → Devices & Services → Fellow → Configure)
 
-1. Go to Settings → Devices & Services
-2. Find "Stagg EKG+"
-3. Click "CONFIGURE"
-4. Select your preferred unit
-5. Submit - the kettle display updates immediately
+- **Temperature unit** — the unit Home Assistant uses
+- **Temperature-setting method** — *Direct* (firmware set-target commands with verification; recommended) or *Dial emulation* (slower; for firmwares where the set commands don't work)
+- **Poll interval** — 5–60 seconds, default 10
+- **Sync unit to the kettle's display** — off by default; when on, changing the unit here also switches the kettle's own display
 
 ## Usage
 
-### Basic Control
-
 ```yaml
 # Heat water to 95°C
-service: water_heater.turn_on
+service: water_heater.set_temperature
 target:
   entity_id: water_heater.fellow_kettle
 data:
   temperature: 95
 ```
-
-### Automations
 
 **Morning Coffee**
 ```yaml
@@ -136,11 +92,6 @@ automation:
     trigger:
       platform: time
       at: "07:00:00"
-    condition:
-      # Only if water detected
-      - condition: state
-        entity_id: binary_sensor.fellow_low_water_warning
-        state: "off"
     action:
       - service: water_heater.set_temperature
         target:
@@ -152,168 +103,85 @@ automation:
           entity_id: water_heater.fellow_kettle
 ```
 
-**Water Ready Notification**
-```yaml
-automation:
-  - alias: "Water Ready Notification"
-    trigger:
-      - platform: template
-        value_template: >
-          {{ states('sensor.fellow_current_temperature')|float >=
-             states.water_heater.fellow_kettle.attributes.temperature|float - 2 }}
-    condition:
-      - condition: state
-        entity_id: water_heater.fellow_kettle
-        attribute: current_operation
-        state: "heat"
-    action:
-      - service: notify.mobile_app
-        data:
-          message: "Kettle water is ready!"
-          title: "☕ Coffee Time"
-```
-
-**Tea Temperature Presets**
-```yaml
-script:
-  heat_green_tea:
-    alias: "Heat for Green Tea"
-    sequence:
-      - service: water_heater.set_temperature
-        target:
-          entity_id: water_heater.fellow_kettle
-        data:
-          temperature: 75
-      - service: water_heater.turn_on
-        target:
-          entity_id: water_heater.fellow_kettle
-
-  heat_black_tea:
-    alias: "Heat for Black Tea"
-    sequence:
-      - service: water_heater.set_temperature
-        target:
-          entity_id: water_heater.fellow_kettle
-        data:
-          temperature: 95
-      - service: water_heater.turn_on
-        target:
-          entity_id: water_heater.fellow_kettle
-```
-
-### Dashboard Card
-
+**Dashboard Card**
 ```yaml
 type: thermostat
 entity: water_heater.fellow_kettle
 name: Coffee Kettle
 ```
 
-## Standalone Python API
+## Troubleshooting
 
-The repository includes a standalone Python API in [`examples/stagg_ekg_api.py`](examples/stagg_ekg_api.py) for use outside Home Assistant.
+### First step: capture what your kettle actually says
 
-### Quick Start
+Different firmwares format the CLI responses differently. From any machine on the kettle's network:
 
-```python
-from stagg_ekg_api import StaggEKGClient
-
-# Initialize
-kettle = StaggEKGClient(host="192.168.1.100")
-
-# Heat water to 95°C
-kettle.heat_to_temperature(95)
-
-# Check status
-state = kettle.get_state()
-print(f"Current: {state.current_temp_c}°C / Target: {state.set_temp_c}°C")
+```bash
+python3 examples/probe_kettle.py <KETTLE_IP>
 ```
 
-See [examples/README.md](examples/README.md) for complete usage examples.
+This sends only read-only commands, prints the raw responses, and shows how the integration's parser interprets them (PASS/FAIL per field). Paste the output into a GitHub issue if something fails. Equivalent raw captures:
 
-## Technical Details
+```bash
+curl 'http://<KETTLE_IP>/cli?cmd=state'
+curl 'http://<KETTLE_IP>/cli?cmd=prtsettings'
+curl 'http://<KETTLE_IP>/cli?cmd=fwinfo'
+```
 
-### Kettle Information
+> **Never** send `cmd=ss` with no argument (reboots the kettle) or `cmd=adcsamples` (crashes it).
 
-- **Firmware:** 1.1.76SSP CLI (May 9, 2024)
-- **Platform:** ESP32 (Espressif)
-- **Protocol:** HTTP
-- **Port:** 80
-- **API:** CLI interface at `/cli?cmd=<command>`
+### Debug logging
 
-### Temperature Control
+```yaml
+logger:
+  logs:
+    custom_components.fellow: debug
+```
 
-- **Range:** 40-100°C (104-212°F)
-- **Step Size:** 0.5°C per dial click
-- **Internal Format:** "2C" (temperature × 2)
-- **Control Method:** Dial rotation (no direct API)
+Every poll then logs the raw `state` response (`Raw state response from …`).
 
-### Physical Buttons
+### Diagnostics download
 
-The kettle has two buttons:
-- **Button 1:** Separate button on base (opens menus)
-- **Button 2:** The dial itself is pressable (wakes and starts heating)
-
-The integration uses Button 2 for power/start operations.
-
-### Update Frequency
-
-- **Automatic polling:** Every 30 seconds
-- **Command response:** Immediate refresh after control actions
-- **Typical latency:** 1-2 seconds for commands
-
-See [KETTLE_SPECS.md](KETTLE_SPECS.md) for complete technical documentation.
-
-## Troubleshooting
+Settings → Devices & Services → Fellow → device page → **Download diagnostics** produces a bundle with the last parsed state and the raw firmware responses. Review it before sharing — it can include network details.
 
 ### Kettle Not Responding
 
-1. Verify the kettle is powered on and WiFi is enabled
+1. Verify the kettle is powered and on WiFi (check the Fellow app)
 2. Check the IP address hasn't changed
-3. Ensure Home Assistant can reach the kettle's network
-4. Try pinging the kettle: `ping 192.168.1.100`
+3. Ensure Home Assistant can reach the kettle's network (VLANs/subnet isolation block it; the network scan only covers Home Assistant's own /24)
+4. Try `curl 'http://<KETTLE_IP>/cli?cmd=state'` from another machine
 
-### Low Water Warning Always On
+### Setting temperature doesn't stick
 
-- Warning triggers when temperature < 30°C
-- If water is present but cold, warning will clear as temp rises
-- This is a temperature-based heuristic, not a physical sensor
+The integration tries `setsettingd settempr` (EKG Pro), then the legacy `setsetting settempr` (EKG+), then dial emulation, verifying each by read-back. If it always ends up dialing, switch the *Temperature-setting method* option to *Dial emulation* to skip the probes. Check debug logs to see which path was used.
 
-### Temperature Unit Mismatch
+## Standalone Python API
 
-- Check integration configuration (Settings → Integrations → Stagg EKG → Configure)
-- Changing units in HA updates the kettle's LCD display
-- Restart integration if sync fails
+[`examples/stagg_ekg_api.py`](examples/stagg_ekg_api.py) is a standalone client for use outside Home Assistant, and [`examples/probe_kettle.py`](examples/probe_kettle.py) is the read-only diagnostic capture tool. See [examples/README.md](examples/README.md).
 
-### Screen Doesn't Turn On
+## Technical Details
 
-- The integration automatically wakes the screen
-- Commands may take 1-2 seconds to complete
-- Check entity state updates after a moment
+- **Protocol:** HTTP GET to `/cli?cmd=<command>` on port 80, plain-text responses (an undocumented firmware debug interface — it can change with firmware updates)
+- **Platform:** ESP32 (Espressif)
+- **Range:** 40–100°C (104–212°F)
+- **Polling:** every 10 seconds by default (5–60 configurable)
+
+See [KETTLE_SPECS.md](KETTLE_SPECS.md) for the command reference, including the EKG Pro differences and the list of commands that must never be sent.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Run the parser tests with `pip install pytest && pytest tests/` — no Home Assistant installation needed. If your kettle's responses parse incorrectly, include `probe_kettle.py` output in your issue.
 
 ## License
 
 This is free and unencumbered software released into the public domain. See the [LICENSE](LICENSE) file for details.
 
-Anyone is free to copy, modify, publish, use, compile, sell, or distribute this software for any purpose, commercial or non-commercial, and by any means.
-
 ## Acknowledgments
 
-- Built for [Fellow EKG electric kettles](https://fellowproducts.com/) (Stagg EKG, Stagg EKG+, Stagg EKG Pro, Corvo EKG)
-- Uses the kettle's built-in HTTP CLI interface
-- Developed and tested with firmware version 1.1.76SSP CLI on Home Assistant 2025.12.5
-- **Created with AI assistance** - This integration was developed using Claude Code
+- Built for [Fellow](https://fellowproducts.com/) Stagg EKG WiFi kettles
+- EKG Pro command set cross-checked against the [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro) reverse-engineering project
+- **Created with AI assistance** — originally developed with Claude Code and reworked for the EKG Pro
 
 ## Disclaimer
 
-This is an unofficial integration not affiliated with Fellow Products. Use at your own risk.
-
----
-
-**Enjoy your smart kettle!** ☕
-
-If you find this integration helpful, consider starring the repository!
+This is an unofficial integration not affiliated with Fellow Products. It drives an undocumented debug interface; use at your own risk.

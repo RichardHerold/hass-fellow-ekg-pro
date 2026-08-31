@@ -1,4 +1,4 @@
-"""The Fellow Stagg EKG+ integration."""
+"""The Fellow Stagg EKG+ / EKG Pro integration."""
 from __future__ import annotations
 
 import logging
@@ -7,15 +7,23 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import (
+    CONF_POLL_INTERVAL,
+    CONF_TEMP_SET_METHOD,
+    DEFAULT_POLL_INTERVAL,
+    DOMAIN,
+    TEMP_METHOD_DIRECT,
+)
 from .kettle import KettleTransientError, StaggEKGClient
 
 # After this many consecutive transient failures, give up holding the
-# last known state and let HA mark the device unavailable. At a 5s poll
-# interval that's roughly half a minute of staleness — long enough to
+# last known state and let HA mark the device unavailable. At the default
+# 10s poll interval that's roughly a minute of staleness — long enough to
 # absorb the "kettle just turned off" window, short enough that a truly
 # offline kettle doesn't show stale data forever.
 MAX_CONSECUTIVE_TRANSIENT_FAILURES = 6
@@ -32,13 +40,6 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.WATER_HE
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Stagg EKG from a config entry."""
-    from .const import (
-        CONF_TEMP_SET_METHOD,
-        CONF_TEMPERATURE_UNIT,
-        TEMP_METHOD_DIRECT,
-        UNIT_CELSIUS,
-    )
-
     host = entry.data["host"]
     # Options take precedence over the original entry data so changes from
     # the options flow apply without re-adding the integration.
@@ -46,22 +47,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_TEMP_SET_METHOD,
         entry.data.get(CONF_TEMP_SET_METHOD, TEMP_METHOD_DIRECT),
     )
+    poll_interval = entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
 
-    # Create API client
     client = StaggEKGClient(host=host, temp_method=temp_method)
 
-    # Sync kettle units with configured preference
-    configured_unit = entry.data.get(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
-    try:
-        if configured_unit == UNIT_CELSIUS:
-            await hass.async_add_executor_job(client.set_units_celsius)
-        else:
-            await hass.async_add_executor_job(client.set_units_fahrenheit)
-    except Exception as err:
-        _LOGGER.warning("Failed to sync kettle temperature units: %s", err)
+    # Best-effort device metadata; must never block or fail setup.
+    fw_info = await hass.async_add_executor_job(client.get_firmware_info)
+    mac = await hass.async_add_executor_job(client.get_mac)
 
-    # Create update coordinator
-    coordinator = StaggEKGDataUpdateCoordinator(hass, client)
+    coordinator = StaggEKGDataUpdateCoordinator(hass, client, poll_interval)
+    coordinator.device_info = DeviceInfo(
+        identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
+        connections={(dr.CONNECTION_NETWORK_MAC, format_mac(mac))} if mac else set(),
+        name=entry.title or "Fellow Stagg EKG",
+        manufacturer="Fellow",
+        model=fw_info.get("project") or "Stagg EKG (WiFi)",
+        sw_version=fw_info.get("version"),
+        configuration_url=f"http://{host}",
+    )
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -96,9 +99,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Stagg EKG data."""
 
-    def __init__(self, hass: HomeAssistant, client: StaggEKGClient) -> None:
+    def __init__(
+        self, hass: HomeAssistant, client: StaggEKGClient, poll_interval: int
+    ) -> None:
         """Initialize."""
         self.client = client
+        self.device_info: DeviceInfo | None = None
         self._consecutive_transient_failures = 0
         self._was_docked: bool | None = None
         self._lifted_at = None
@@ -107,7 +113,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=5),
+            update_interval=timedelta(seconds=poll_interval),
         )
 
     @property
@@ -154,11 +160,12 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._consecutive_transient_failures = 0
 
-        # Track docked → undocked transition for lift detection. We only
-        # care about the falling edge; the cooldown window in
-        # `recently_lifted` handles re-dock flapping.
-        if self._was_docked and not state.is_docked:
-            self._lifted_at = dt_util.utcnow()
-        self._was_docked = state.is_docked
+        # Track docked → undocked transition for lift detection. Only a
+        # response that actually carried a temperature field counts — a
+        # truncated response without one is a parse anomaly, not a lift.
+        if state.temp_field_present:
+            if self._was_docked and not state.is_docked:
+                self._lifted_at = dt_util.utcnow()
+            self._was_docked = state.is_docked
 
         return {"state": state}
