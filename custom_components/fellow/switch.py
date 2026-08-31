@@ -93,11 +93,15 @@ class StaggEKGWarmingSwitch(StaggEKGSwitchBase):
 
     @property
     def is_on(self) -> bool:
-        """Return true if warming is on."""
+        """Return true if the kettle is in Hold (keep-warm) mode.
+
+        Mode-based only: the firmware's `wd` flag means "wind-down", not
+        keep-warm — on the EKG Pro it can be set during ordinary heating,
+        which made this switch light up in lockstep with the Heating
+        switch.
+        """
         state = self._state
-        if state is None:
-            return False
-        return state.warming or state.is_holding
+        return state.is_holding if state else False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn warming on (enter Hold mode)."""

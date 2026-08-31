@@ -116,10 +116,11 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             return OPERATION_MODE_OFF
         elif state.is_heating:
             return OPERATION_MODE_HEAT
-        elif state.warming or state.is_holding:
+        elif state.is_holding:
+            # Mode-based only: the wd flag means wind-down, not keep-warm.
             return OPERATION_MODE_WARM
         else:
-            # S_Standby, S_HeatOff without warming = effectively off
+            # S_Standby, S_HeatOff without holding = effectively off
             return OPERATION_MODE_OFF
 
     @property

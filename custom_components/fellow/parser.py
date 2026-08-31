@@ -169,7 +169,12 @@ class ParsedState:
 
     @property
     def warming(self) -> bool:
-        """Keep-warm flag from the ketl= line (wd), if reported."""
+        """The ketl= line's `wd` flag, if reported.
+
+        Documented as "wind-down" on the EKG Pro — NOT keep-warm; it can be
+        set during ordinary heating. Entities key keep-warm off `is_holding`
+        (Hold mode); this flag is exposed for diagnostics only.
+        """
         return bool(self.flags.get("wd", 0))
 
     @property

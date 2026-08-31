@@ -15,6 +15,25 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.1.1] - 2026-08-31
+
+### Fixed
+- **Turning the kettle off no longer fails when it's too busy to answer a
+  state read.** While heating, the kettle's HTTP server can stall past the
+  read timeout; the control actions previously read state *before* sending
+  their command, so `switch.turn_off` could die with "Kettle did not
+  respond to 'state'" without ever sending `ss S_Off`. Control actions are
+  now command-first: a failed state read is logged and the command is sent
+  anyway (stop retries up to 3 times and only errors if every send fails);
+  verification reads are best-effort.
+- **The Warming switch no longer mirrors the Heating switch.** Its state
+  keyed off the firmware's `wd` flag, which means "wind-down" — on the
+  EKG Pro it can be set during ordinary heating, making Warming light up
+  whenever Heating did. Warming (and the water heater's "warm" operation)
+  now reflect Hold mode only. Reminder on semantics: Heating heats to
+  target then shuts off; Warming (Hold) heats to target and stays there —
+  they look identical until the target is reached.
+
 ## [1.1.0] - 2026-08-31
 
 ### Changed
