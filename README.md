@@ -73,7 +73,7 @@ The kettle joins your WiFi via the Fellow app. Find its IP in your router's DHCP
 
 1. Settings → Devices & Services → Add Integration → "Fellow"
 2. Choose **Enter IP address** (recommended) and type the kettle's IP, or **Scan network** — the scan asks which network to look on (prefilled with Home Assistant's own subnet), so a kettle on a different subnet or IoT VLAN can be found by entering its network (e.g. `192.168.20.0/24`). Cross-VLAN scanning requires your firewall to allow HTTP (port 80) from Home Assistant to that subnet.
-3. Pick your preferred temperature unit for Home Assistant
+3. Pick your preferred temperature unit for Home Assistant, and optionally a device name — left blank, the kettle's detected model name is used (it becomes the entity-ID prefix). To rename later, use the pencil icon on the device page; Home Assistant offers to update entity IDs too.
 
 Setup does **not** change anything on the kettle itself.
 
