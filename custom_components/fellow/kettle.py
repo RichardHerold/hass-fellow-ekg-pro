@@ -57,6 +57,8 @@ CMD_SET_TARGET_DIRECT = "setsettingd settempr {temp_f:.1f}"
 # Older EKG+ variant; on some firmwares this only saves a preference.
 CMD_SET_TARGET_LEGACY = "setsetting settempr {temp_f:d}"
 CMD_SET_HOLD_MINUTES = "setsetting hold {minutes:d}"
+CMD_SET_CHIME = "setsetting chime {level:d}"
+CMD_SET_CLOCK = "setclock {hour:d} {minute:d} {second:d}"
 CMD_SET_GUIDE = "setsetting guide {enabled:d}"
 CMD_PRTSETTINGS = "prtsettings"
 CMD_FWINFO = "fwinfo"
@@ -278,6 +280,19 @@ class StaggEKGClient:
         """Set the keep-warm hold duration (1-120 minutes)."""
         minutes = max(1, min(120, int(minutes)))
         return self._send_command(CMD_SET_HOLD_MINUTES.format(minutes=minutes))
+
+    def set_chime(self, level: int) -> str:
+        """Set the chime volume (0-10, 0 = silent)."""
+        level = max(0, min(10, int(level)))
+        return self._send_command(CMD_SET_CHIME.format(level=level))
+
+    def set_clock(self, hour: int, minute: int, second: int = 0) -> str:
+        """Set the kettle's display clock (24h)."""
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            raise ValueError(f"invalid time {hour}:{minute}:{second}")
+        return self._send_command(
+            CMD_SET_CLOCK.format(hour=hour, minute=minute, second=second)
+        )
 
     def _ensure_awake(self) -> ParsedState:
         """Wake the kettle if it's off via a dial press. Returns current state.

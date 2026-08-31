@@ -55,7 +55,8 @@
           "poll_interval": "Idle poll interval (seconds)",
           "active_poll_interval": "Active poll interval (seconds)",
           "sync_kettle_units": "Sync unit to the kettle's display",
-          "presets": "Temperature presets"
+          "presets": "Temperature presets",
+          "sync_clock": "Keep the kettle's clock synced"
         },
         "data_description": {
           "temperature_unit": "The unit Home Assistant uses for this kettle",
@@ -63,7 +64,8 @@
           "poll_interval": "How often to read the kettle's state while it's off (5-60 seconds)",
           "active_poll_interval": "How often to read the kettle's state while it's heating or keeping warm (2-60 seconds) — faster polling keeps the temperature and Water Ready fresh",
           "sync_kettle_units": "When enabled, changing the temperature unit here also changes the unit shown on the kettle's own display",
-          "presets": "One-tap heat buttons as 'Name: temperature' pairs separated by commas, in your configured unit — e.g. 'Pour-over: 96, Green tea: 79'. A Boil button is always included."
+          "presets": "One-tap heat buttons as 'Name: temperature' pairs separated by commas, in your configured unit — e.g. 'Pour-over: 96, Green tea: 79'. A Boil button is always included.",
+          "sync_clock": "When enabled, the kettle's display clock is set to Home Assistant's local time on startup and once a day (handles drift and DST). A manual Sync Clock button is always available."
         }
       }
     },

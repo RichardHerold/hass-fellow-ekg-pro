@@ -23,6 +23,10 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 | Kettle | Water Heater | Main control: target temperature, off/heat/warm; supports the `fellow.heat_to` action |
 | Boil / your presets | Buttons | One tap: set target and start heating (presets configurable in options) |
 | Water Ready | Binary Sensor | On while an active cycle is at target — trigger "ready" notifications on it |
+| Time to Ready | Sensor | Estimated minutes until target while heating (from the live heating rate) |
+| Hold Duration | Number (config) | How long keep-warm stays on before auto-off (1–120 min) |
+| Chime Volume | Number (config) | Kettle chime level, 0 = silent — automatable for quiet hours |
+| Sync Clock | Button (config) | Set the kettle's display clock to HA's local time (or enable daily auto-sync in options) |
 | Current Temperature | Sensor | Real-time water temperature |
 | Target Temperature | Sensor | Target temperature setting |
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
