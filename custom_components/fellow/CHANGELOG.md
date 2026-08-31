@@ -15,6 +15,18 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.5.0] - 2026-08-31
+
+### Added
+- **Integration Update entity**: checks this repository's GitHub releases
+  twice a day and shows "update available" in Settings → Updates with
+  release notes — works for both HACS and manual installs, and gives
+  automations a standard `update.*` entity to trigger notifications on.
+  Installing still happens via HACS or a manual copy (the entity links to
+  the release; an integration can't safely overwrite itself). Failures of
+  the check (offline, rate limit, no releases yet) are silent and never
+  affect the kettle entities.
+
 ## [1.4.0] - 2026-08-31
 
 Comfort release: daily-use conveniences built on verified kettle commands.

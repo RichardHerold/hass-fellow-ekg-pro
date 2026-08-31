@@ -27,6 +27,7 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 | Hold Duration | Number (config) | How long keep-warm stays on before auto-off (1–120 min) |
 | Chime Volume | Number (config) | Kettle chime level, 0 = silent — automatable for quiet hours |
 | Sync Clock | Button (config) | Set the kettle's display clock to HA's local time (or enable daily auto-sync in options) |
+| Integration Update | Update | "Update available" when a new version is released on GitHub, with release notes |
 | Current Temperature | Sensor | Real-time water temperature |
 | Target Temperature | Sensor | Target temperature setting |
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
@@ -124,6 +125,20 @@ automation:
         data:
           title: "☕ Kettle"
           message: "Water is at temperature"
+```
+
+**Update notifications** — the integration ships an update entity that checks this repo's GitHub releases twice a day; new versions appear in Settings → Updates with release notes (HACS shows its own update alongside it when installed that way). For a phone ping:
+```yaml
+automation:
+  - alias: "Kettle integration update available"
+    trigger:
+      - platform: state
+        entity_id: update.fellow_kettle_integration_update
+        to: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "New Fellow kettle integration version available"
 ```
 
 **Dashboard Card**
