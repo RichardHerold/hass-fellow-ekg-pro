@@ -15,6 +15,26 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.4.0] - 2026-08-31
+
+Comfort release: daily-use conveniences built on verified kettle commands.
+
+### Added
+- **Time to Ready sensor**: projected minutes until the water reaches
+  target, computed from the heating rate over the last ~90 seconds of
+  polls. Unknown while off/holding or too early in a cycle; resets when
+  cold water is added.
+- **Hold Duration number** (1-120 min): how long keep-warm stays on
+  before the kettle shuts itself off (`setsetting hold`).
+- **Chime Volume number** (0-10, 0 = silent): the kettle's chime level
+  (`setsetting chime`) — automatable, e.g. quiet hours.
+- **Sync Clock button** plus an opt-in option to keep the kettle's
+  display clock synced to Home Assistant's local time daily (drift and
+  DST handled).
+
+Settings numbers read their initial values from `prtsettings` once at
+setup; a change made on the kettle's own menu shows up after a reload.
+
 ## [1.3.0] - 2026-08-31
 
 ### Changed

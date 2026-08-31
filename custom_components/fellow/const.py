@@ -35,6 +35,10 @@ DEFAULT_SYNC_UNITS = False
 CONF_PRESETS = "presets"
 DEFAULT_PRESETS = ""
 
+# Keep the kettle's display clock synced to HA time (daily + on setup)
+CONF_SYNC_CLOCK = "sync_clock"
+DEFAULT_SYNC_CLOCK = False
+
 # Custom action: set target and start heating in one call
 SERVICE_HEAT_TO = "heat_to"
 

@@ -10,11 +10,12 @@ import logging
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 from . import StaggEKGDataUpdateCoordinator
 from .const import (
@@ -54,11 +55,12 @@ async def async_setup_entry(
         _LOGGER.warning("Ignoring invalid presets option (%s)", err)
         presets = []
 
-    entities: list[StaggEKGPresetButton] = [
+    entities: list[ButtonEntity] = [
         StaggEKGPresetButton(coordinator, entry, "Boil", BOIL_TEMP_C)
     ]
     for name, temp_c in presets:
         entities.append(StaggEKGPresetButton(coordinator, entry, name, temp_c))
+    entities.append(StaggEKGSyncClockButton(coordinator, entry))
 
     # Drop registry entries for presets that were removed or renamed, so
     # stale buttons don't linger as unavailable entities.
@@ -110,3 +112,27 @@ class StaggEKGPresetButton(CoordinatorEntity, ButtonEntity):
             self.coordinator.client.start_heating
         )
         await self.coordinator.async_request_refresh()
+
+
+class StaggEKGSyncClockButton(CoordinatorEntity, ButtonEntity):
+    """Set the kettle's display clock to Home Assistant's local time."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:clock-check-outline"
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._attr_has_entity_name = True
+        self._attr_device_info = coordinator.device_info
+        self._attr_unique_id = f"{entry.entry_id}_sync_clock"
+        self._attr_name = "Sync Clock"
+
+    async def async_press(self) -> None:
+        """Push HA's local time to the kettle's clock."""
+        local = dt_util.now()
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.set_clock, local.hour, local.minute, local.second
+        )

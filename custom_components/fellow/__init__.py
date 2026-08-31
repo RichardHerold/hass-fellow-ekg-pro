@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -9,18 +10,22 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ACTIVE_POLL_INTERVAL,
     CONF_POLL_INTERVAL,
+    CONF_SYNC_CLOCK,
     CONF_TEMP_SET_METHOD,
     DEFAULT_ACTIVE_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
+    DEFAULT_SYNC_CLOCK,
     DOMAIN,
     TEMP_METHOD_DIRECT,
 )
+from .eta import HeatingRateEstimator
 from .kettle import KettleTransientError, StaggEKGClient
 from .parser import is_water_ready
 
@@ -44,6 +49,7 @@ PLATFORMS: list[Platform] = [
     Platform.WATER_HEATER,
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
+    Platform.NUMBER,
 ]
 
 
@@ -105,6 +111,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Forward setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Optionally keep the kettle's display clock synced to HA time
+    # (daily and on setup) — the kettle's clock drifts and forgets DST.
+    if entry.options.get(CONF_SYNC_CLOCK, DEFAULT_SYNC_CLOCK):
+
+        async def _async_sync_clock(_now=None) -> None:
+            local = dt_util.now()
+            try:
+                await hass.async_add_executor_job(
+                    client.set_clock, local.hour, local.minute, local.second
+                )
+                _LOGGER.debug("Synced kettle clock to %s", local.strftime("%H:%M:%S"))
+            except Exception as err:  # pylint: disable=broad-except
+                _LOGGER.warning("Failed to sync kettle clock: %s", err)
+
+        await _async_sync_clock()
+        entry.async_on_unload(
+            async_track_time_interval(hass, _async_sync_clock, timedelta(hours=24))
+        )
+
     # Reload when options change so settings like temp_set_method take
     # effect without an HA restart.
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -139,6 +164,8 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         self.client = client
         self.device_info: DeviceInfo | None = None
         self.water_ready: bool = False
+        self.minutes_to_ready: float | None = None
+        self._eta = HeatingRateEstimator()
         self._idle_interval = timedelta(seconds=poll_interval)
         self._active_interval = timedelta(seconds=active_poll_interval)
         self._consecutive_transient_failures = 0
@@ -205,6 +232,15 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             self._was_docked = state.is_docked
 
         self.water_ready = is_water_ready(state)
+
+        # Time-to-ready estimate: feed the heating-rate estimator while a
+        # heat cycle runs; anything else invalidates the curve.
+        if state.is_heating and state.current_temp_c is not None:
+            self._eta.add_sample(time.monotonic(), state.current_temp_c)
+            self.minutes_to_ready = self._eta.minutes_to(state.target_temp_c)
+        else:
+            self._eta.reset()
+            self.minutes_to_ready = None
 
         # Adaptive polling: track a live heat/hold cycle closely so the
         # climbing temperature and Water Ready stay fresh, then relax to

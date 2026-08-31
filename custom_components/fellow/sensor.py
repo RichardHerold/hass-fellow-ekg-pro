@@ -7,7 +7,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -28,6 +28,7 @@ async def async_setup_entry(
         StaggEKGCurrentTempSensor(coordinator, entry),
         StaggEKGTargetTempSensor(coordinator, entry),
         StaggEKGModeSensor(coordinator, entry),
+        StaggEKGTimeToReadySensor(coordinator, entry),
         StaggEKGBoilThresholdSensor(coordinator, entry),
     ]
 
@@ -126,6 +127,34 @@ class StaggEKGModeSensor(StaggEKGSensorBase):
         if mode.startswith("S_"):
             mode = mode[2:]
         return mode
+
+
+class StaggEKGTimeToReadySensor(StaggEKGSensorBase):
+    """Projected minutes until the water reaches target while heating.
+
+    Computed from the heating rate over the last ~90 seconds of polls.
+    Unknown while the kettle is off, holding, or too early in a cycle to
+    have a stable rate.
+    """
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:timer-sand"
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_time_to_ready"
+        self._attr_name = "Time to Ready"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the estimated minutes until target."""
+        minutes = self.coordinator.minutes_to_ready
+        return round(minutes, 1) if minutes is not None else None
 
 
 class StaggEKGBoilThresholdSensor(StaggEKGSensorBase):
