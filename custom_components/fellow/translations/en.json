@@ -28,6 +28,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the kettle. Please check the IP address and ensure the kettle is powered on and connected to your network.",
+      "incomplete_response": "The kettle answered, but its response could not be fully understood, so setup was stopped (the temperature entities would not work). Make sure the kettle is sitting on its base and try again. If it keeps failing, check the Home Assistant log for the raw response and run examples/probe_kettle.py — your firmware may format responses differently.",
       "unknown": "Unexpected error occurred"
     },
     "abort": {

@@ -234,6 +234,26 @@ def parse_state(text: str) -> ParsedState:
     )
 
 
+def state_problems(state: "ParsedState") -> list:
+    """Explain why a parsed state is not good enough to run the integration.
+
+    Used by the config flow to refuse setup when the kettle answered but
+    the response couldn't be understood — connecting is not enough, since
+    every temperature entity would be broken. Returns a list of
+    human-readable problem strings; empty means the state is usable.
+    """
+    problems = []
+    if not state.temp_field_present:
+        problems.append("no 'tempr=' (current temperature) field in response")
+    elif state.current_temp_c is None:
+        problems.append(
+            "current temperature is implausible (kettle may be off its base)"
+        )
+    if state.target_temp_c is None:
+        problems.append("no usable 'temprT=' (target temperature) in response")
+    return problems
+
+
 def parse_fwinfo(text: str) -> dict:
     """Extract whatever firmware metadata is recognizable in fwinfo output."""
     info: dict = {}

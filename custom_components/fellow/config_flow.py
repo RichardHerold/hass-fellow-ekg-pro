@@ -30,6 +30,7 @@ from .const import (
 )
 from .discovery import discover_kettles
 from .kettle import StaggEKGClient
+from .parser import state_problems
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +45,13 @@ STEP_MANUAL_DATA_SCHEMA = vol.Schema(
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
+    """Validate the user input allows us to connect AND understand the kettle.
+
+    Connecting is not enough: a kettle can answer with a response format the
+    parser doesn't understand, which would set up an integration whose
+    temperature entities are all broken (a false-positive success). So the
+    parsed state must actually contain usable temperatures before setup is
+    allowed to complete.
 
     Returns a title and, when the kettle reports one, its MAC address for
     use as the config entry's unique ID.
@@ -52,11 +59,28 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     client = StaggEKGClient(host=data[CONF_HOST])
 
     try:
-        # Try to get state to verify connectivity
-        await hass.async_add_executor_job(client.get_state)
+        state = await hass.async_add_executor_job(client.get_state)
     except Exception as err:
         _LOGGER.error("Cannot connect to kettle: %s", err)
         raise CannotConnect
+
+    problems = state_problems(state)
+    if problems:
+        # Warning level so it lands in the log without debug logging on;
+        # the raw response is exactly what an issue report needs.
+        _LOGGER.warning(
+            "Kettle at %s answered but the response is not fully understood "
+            "(%s). Parsed: mode=%s current=%s target=%s units=%s. Raw response: %r "
+            "— please run examples/probe_kettle.py and report this output.",
+            data[CONF_HOST],
+            "; ".join(problems),
+            state.mode,
+            state.current_temp_c,
+            state.target_temp_c,
+            state.units,
+            state.raw,
+        )
+        raise IncompleteResponse
 
     # Best-effort MAC for a stable unique ID (survives IP changes).
     mac = await hass.async_add_executor_job(client.get_mac)
@@ -95,6 +119,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             info = await validate_input(self.hass, data)
         except CannotConnect:
             errors["base"] = "cannot_connect"
+            return None
+        except IncompleteResponse:
+            errors["base"] = "incomplete_response"
             return None
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
@@ -230,3 +257,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
 class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
+
+
+class IncompleteResponse(HomeAssistantError):
+    """The kettle answered, but the response couldn't be fully parsed."""
