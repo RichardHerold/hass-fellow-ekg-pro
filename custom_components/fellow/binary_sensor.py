@@ -6,6 +6,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -41,17 +42,13 @@ class StaggEKGBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self._entry = entry
         self._attr_has_entity_name = True
+        self._attr_device_info = coordinator.device_info
 
     @property
-    def device_info(self):
-        """Return device information."""
-        return {
-            "identifiers": {(DOMAIN, self._entry.entry_id)},
-            "name": "Stagg EKG+",
-            "manufacturer": "Fellow",
-            "model": "Stagg EKG+",
-            "sw_version": "1.1.76SSP",
-        }
+    def _state(self):
+        if self.coordinator.data and "state" in self.coordinator.data:
+            return self.coordinator.data["state"]
+        return None
 
 
 class StaggEKGPowerBinarySensor(StaggEKGBinarySensorBase):
@@ -70,27 +67,31 @@ class StaggEKGPowerBinarySensor(StaggEKGBinarySensorBase):
     @property
     def is_on(self) -> bool:
         """Return true if kettle is powered on."""
-        if self.coordinator.data and "state" in self.coordinator.data:
-            return self.coordinator.data["state"].is_powered_on
-        return False
+        state = self._state
+        return state.is_powered_on if state else False
 
     @property
     def extra_state_attributes(self):
         """Return additional state attributes."""
-        if self.coordinator.data and "state" in self.coordinator.data:
-            state = self.coordinator.data["state"]
-            return {
-                "mode": state.mode,
-                "screen": state.screen_name,
-                "in_menu": state.is_in_menu,
-            }
-        return {}
+        state = self._state
+        if state is None:
+            return {}
+        return {
+            "mode": state.mode,
+            "screen": state.screen_name,
+            "in_menu": state.is_in_menu,
+        }
 
 
 class StaggEKGLiftedBinarySensor(StaggEKGBinarySensorBase):
-    """Binary sensor that fires when the kettle is taken off the base."""
+    """Binary sensor that fires when the kettle is taken off the base.
+
+    Inferred from the temperature reading disappearing/going implausible;
+    disabled by default until verified on your kettle model.
+    """
 
     _attr_device_class = BinarySensorDeviceClass.MOVING
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
@@ -108,9 +109,17 @@ class StaggEKGLiftedBinarySensor(StaggEKGBinarySensorBase):
 
 
 class StaggEKGWaterBinarySensor(StaggEKGBinarySensorBase):
-    """Binary sensor for water detection."""
+    """Binary sensor for the firmware's 'nw' (no water) flag.
+
+    The flag's meaning is inferred from the ketl= status line and hasn't
+    been verified on all models, so this is a disabled-by-default
+    diagnostic. The full flags dict is exposed as attributes so you can
+    watch which flag actually flips when you lift or empty the kettle.
+    """
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
@@ -122,19 +131,21 @@ class StaggEKGWaterBinarySensor(StaggEKGBinarySensorBase):
         self._attr_icon = "mdi:water-alert"
 
     @property
-    def is_on(self) -> bool:
-        """Return true if kettle may have low/no water."""
-        if self.coordinator.data and "state" in self.coordinator.data:
-            return self.coordinator.data["state"].may_have_no_water
-        return False
+    def is_on(self) -> bool | None:
+        """Return the firmware's no-water flag, or None when not reported."""
+        state = self._state
+        if state is None or "nw" not in state.flags:
+            return None
+        return bool(state.flags["nw"])
 
     @property
     def extra_state_attributes(self):
-        """Return additional state attributes."""
-        if self.coordinator.data and "state" in self.coordinator.data:
-            state = self.coordinator.data["state"]
-            return {
-                "current_temperature": state.current_temp_c,
-                "note": "Temperature below 30°C may indicate no water",
-            }
-        return {}
+        """Expose all firmware status flags for ground-truthing."""
+        state = self._state
+        if state is None:
+            return {}
+        return {
+            "flags": state.flags,
+            "note": "The 'nw' flag is assumed to mean no-water; watch these "
+            "flags while lifting/emptying the kettle to confirm.",
+        }
