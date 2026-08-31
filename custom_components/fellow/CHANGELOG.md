@@ -15,6 +15,18 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.3.0] - 2026-08-31
+
+### Changed
+- **Adaptive polling**: while the kettle is heating or keeping warm, the
+  integration polls at a faster "active" interval (default every 3
+  seconds, configurable 2-60) so the climbing temperature and the Water
+  Ready sensor track closely; when the kettle is off it relaxes to the
+  idle interval (default 10 seconds, unchanged). The coordinator never
+  overlaps requests, so a slow kettle stretches a cycle instead of piling
+  them up. The options flow labels the existing interval "Idle poll
+  interval" and adds "Active poll interval".
+
 ## [1.2.0] - 2026-08-31
 
 User-action release: the things a person actually wants to do with a kettle

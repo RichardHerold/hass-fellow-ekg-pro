@@ -18,10 +18,16 @@ UNIT_FAHRENHEIT = "fahrenheit"
 TEMP_METHOD_DIRECT = "direct"
 TEMP_METHOD_DIAL = "dial"
 
-# Polling
-DEFAULT_POLL_INTERVAL = 10  # seconds
+# Polling. The idle interval applies when the kettle is off; while a
+# heat/hold cycle is active the coordinator switches to the faster active
+# interval so the climbing temperature (and Water Ready) track closely.
+CONF_ACTIVE_POLL_INTERVAL = "active_poll_interval"
+DEFAULT_POLL_INTERVAL = 10  # seconds, idle
 MIN_POLL_INTERVAL = 5
 MAX_POLL_INTERVAL = 60
+DEFAULT_ACTIVE_POLL_INTERVAL = 3  # seconds, while heating/holding
+MIN_ACTIVE_POLL_INTERVAL = 2
+MAX_ACTIVE_POLL_INTERVAL = 60
 
 DEFAULT_SYNC_UNITS = False
 
