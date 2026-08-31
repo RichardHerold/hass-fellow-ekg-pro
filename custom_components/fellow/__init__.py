@@ -13,8 +13,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ACTIVE_POLL_INTERVAL,
     CONF_POLL_INTERVAL,
     CONF_TEMP_SET_METHOD,
+    DEFAULT_ACTIVE_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
     TEMP_METHOD_DIRECT,
@@ -55,6 +57,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data.get(CONF_TEMP_SET_METHOD, TEMP_METHOD_DIRECT),
     )
     poll_interval = entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+    active_poll_interval = entry.options.get(
+        CONF_ACTIVE_POLL_INTERVAL, DEFAULT_ACTIVE_POLL_INTERVAL
+    )
 
     client = StaggEKGClient(host=host, temp_method=temp_method)
 
@@ -62,7 +67,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     fw_info = await hass.async_add_executor_job(client.get_firmware_info)
     mac = await hass.async_add_executor_job(client.get_mac)
 
-    coordinator = StaggEKGDataUpdateCoordinator(hass, client, poll_interval)
+    coordinator = StaggEKGDataUpdateCoordinator(
+        hass, client, poll_interval, active_poll_interval
+    )
     coordinator.device_info = DeviceInfo(
         identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
         connections={(dr.CONNECTION_NETWORK_MAC, format_mac(mac))} if mac else set(),
@@ -122,12 +129,18 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Stagg EKG data."""
 
     def __init__(
-        self, hass: HomeAssistant, client: StaggEKGClient, poll_interval: int
+        self,
+        hass: HomeAssistant,
+        client: StaggEKGClient,
+        poll_interval: int,
+        active_poll_interval: int,
     ) -> None:
         """Initialize."""
         self.client = client
         self.device_info: DeviceInfo | None = None
         self.water_ready: bool = False
+        self._idle_interval = timedelta(seconds=poll_interval)
+        self._active_interval = timedelta(seconds=active_poll_interval)
         self._consecutive_transient_failures = 0
         self._was_docked: bool | None = None
         self._lifted_at = None
@@ -136,7 +149,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=poll_interval),
+            update_interval=self._idle_interval,
         )
 
     @property
@@ -192,5 +205,23 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             self._was_docked = state.is_docked
 
         self.water_ready = is_water_ready(state)
+
+        # Adaptive polling: track a live heat/hold cycle closely so the
+        # climbing temperature and Water Ready stay fresh, then relax to
+        # the idle interval when the kettle is off. The coordinator never
+        # overlaps refreshes, so a stalling kettle just stretches a cycle
+        # rather than piling up requests.
+        wanted = (
+            self._active_interval
+            if (state.is_heating or state.is_holding)
+            else self._idle_interval
+        )
+        if self.update_interval != wanted:
+            _LOGGER.debug(
+                "Switching poll interval to %ss (%s)",
+                wanted.total_seconds(),
+                "active" if wanted == self._active_interval else "idle",
+            )
+            self.update_interval = wanted
 
         return {"state": state}

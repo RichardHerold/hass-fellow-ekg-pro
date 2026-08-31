@@ -14,16 +14,20 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
 
 from .const import (
+    CONF_ACTIVE_POLL_INTERVAL,
     CONF_POLL_INTERVAL,
     CONF_PRESETS,
     CONF_SYNC_UNITS,
     CONF_TEMP_SET_METHOD,
     CONF_TEMPERATURE_UNIT,
+    DEFAULT_ACTIVE_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_PRESETS,
     DEFAULT_SYNC_UNITS,
     DOMAIN,
+    MAX_ACTIVE_POLL_INTERVAL,
     MAX_POLL_INTERVAL,
+    MIN_ACTIVE_POLL_INTERVAL,
     MIN_POLL_INTERVAL,
     TEMP_METHOD_DIAL,
     TEMP_METHOD_DIRECT,
@@ -291,6 +295,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ): vol.All(
                         vol.Coerce(int),
                         vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL),
+                    ),
+                    vol.Required(
+                        CONF_ACTIVE_POLL_INTERVAL,
+                        default=self._current(
+                            CONF_ACTIVE_POLL_INTERVAL, DEFAULT_ACTIVE_POLL_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(
+                            min=MIN_ACTIVE_POLL_INTERVAL, max=MAX_ACTIVE_POLL_INTERVAL
+                        ),
                     ),
                     vol.Required(
                         CONF_SYNC_UNITS,

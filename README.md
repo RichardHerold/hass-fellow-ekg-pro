@@ -14,7 +14,7 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 - Monitor current water temperature, target, mode, and heating status
 - Real device info (firmware version, MAC) read from the kettle
 - Built-in diagnostics: download a bundle with the raw firmware responses from Settings → Devices & Services
-- Local polling (default every 10 seconds, configurable 5–60)
+- Adaptive local polling — every 3 seconds while heating/keeping warm, every 10 seconds when idle (both configurable)
 
 ## Entities
 
@@ -75,7 +75,7 @@ Setup only succeeds when the kettle both **answers and is understood**: validati
 
 - **Temperature unit** — the unit Home Assistant uses
 - **Temperature-setting method** — *Direct* (firmware set-target commands with verification; recommended) or *Dial emulation* (slower; for firmwares where the set commands don't work)
-- **Poll interval** — 5–60 seconds, default 10
+- **Poll intervals** — idle (default 10s) and active-while-heating (default 3s), both configurable
 - **Sync unit to the kettle's display** — off by default; when on, changing the unit here also switches the kettle's own display
 
 ## Usage
@@ -183,7 +183,7 @@ The integration tries `setsettingd settempr` (EKG Pro), then the legacy `setsett
 - **Protocol:** HTTP GET to `/cli?cmd=<command>` on port 80, plain-text responses (an undocumented firmware debug interface — it can change with firmware updates)
 - **Platform:** ESP32 (Espressif)
 - **Range:** 40–100°C (104–212°F)
-- **Polling:** every 10 seconds by default (5–60 configurable)
+- **Polling:** adaptive — every 3 seconds while heating/keeping warm, every 10 seconds when idle (both configurable in options)
 
 See [KETTLE_SPECS.md](KETTLE_SPECS.md) for the command reference, including the EKG Pro differences and the list of commands that must never be sent.
 
