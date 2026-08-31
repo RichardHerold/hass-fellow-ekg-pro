@@ -218,9 +218,9 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
                     err,
                 )
                 return self.data
-            raise UpdateFailed(f"Kettle unresponsive: {err}")
+            raise UpdateFailed(f"Kettle unresponsive: {err}") from err
         except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            raise UpdateFailed(f"Error communicating with API: {err}") from err
 
         self._consecutive_transient_failures = 0
 
@@ -253,7 +253,9 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             if (state.is_heating or state.is_holding)
             else self._idle_interval
         )
-        if self.update_interval != wanted:
+        # update_interval is set by the DataUpdateCoordinator base class;
+        # pylint can't see that and flags the read.
+        if self.update_interval != wanted:  # pylint: disable=access-member-before-definition
             _LOGGER.debug(
                 "Switching poll interval to %ss (%s)",
                 wanted.total_seconds(),

@@ -73,7 +73,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         state = await hass.async_add_executor_job(client.get_state)
     except Exception as err:
         _LOGGER.error("Cannot connect to kettle: %s", err)
-        raise CannotConnect
+        raise CannotConnect from err
 
     problems = state_problems(state)
     if problems:

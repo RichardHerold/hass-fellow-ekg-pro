@@ -134,8 +134,6 @@ async def discover_kettles(
     hass: "HomeAssistant", network: IPv4Network
 ) -> list[str]:
     """Return IPs on `network` that answer like Stagg EKG kettles."""
-    import aiohttp  # noqa: F401 - ensure available before building session
-
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
     candidates = [str(ip) for ip in network.hosts()]

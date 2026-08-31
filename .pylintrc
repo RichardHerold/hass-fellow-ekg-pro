@@ -1,0 +1,39 @@
+# Pylint configuration for a Home Assistant custom integration.
+# CI runs pylint without Home Assistant installed, and several default
+# checks fight HA's entity/callback patterns — the disables below are
+# those two categories, with a note each. Everything else stays on.
+
+[MAIN]
+py-version = 3.13
+
+[MESSAGES CONTROL]
+disable =
+    # Dependencies (homeassistant, aiohttp, voluptuous, requests, pytest)
+    # are not installed in the lint environment.
+    import-error,
+    # HA entities are declarative: many small classes with attributes and
+    # one or two properties.
+    too-few-public-methods,
+    too-many-instance-attributes,
+    too-many-public-methods,
+    # HA callbacks and platform setup signatures carry arguments we don't
+    # always use (hass, entry, **kwargs).
+    unused-argument,
+    # Best-effort paths (device metadata, diagnostics, update checks)
+    # deliberately catch broadly so they can never break the kettle.
+    broad-exception-caught,
+    # discovery.py and tests import HA/aiohttp lazily on purpose so the
+    # pure helpers stay importable without Home Assistant.
+    import-outside-toplevel,
+    # HA's convention groups homeassistant imports separately from
+    # third-party ones, which trips pylint's default ordering.
+    wrong-import-order,
+    # The _attr_* pattern sets entity attributes outside __init__.
+    attribute-defined-outside-init,
+    # parser.py uses a module-level warn-once flag by design.
+    global-statement,
+    # The test modules share the same import-by-path boilerplate on
+    # purpose (each must be runnable standalone without HA).
+    duplicate-code,
+    # Test names are their own documentation.
+    missing-function-docstring

@@ -15,6 +15,28 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.6.0] - 2026-08-31
+
+### Added
+- **Kettle State enum sensor** (Ember-mug-style): one glanceable
+  lifecycle value — Off / Heating / At temperature / Keeping warm —
+  with per-state icons and the raw firmware mode as an attribute.
+  "At temperature" covers an active Heat or Hold cycle whose water has
+  reached target.
+
+### Breaking
+- **The Water Ready binary sensor is removed**, replaced by the Kettle
+  State sensor. Retarget automations from
+  `binary_sensor.*_water_ready` `to: "on"` to
+  `sensor.*_kettle_state` `to: "at_temperature"`. The old entity is
+  cleaned from the registry automatically.
+
+### CI
+- The stock Pylint workflow added on main is tuned so it can actually
+  pass: single supported Python version, dependencies installed, and a
+  pylint configuration appropriate for a Home Assistant custom
+  component.
+
 ## [1.5.0] - 2026-08-31
 
 ### Added
