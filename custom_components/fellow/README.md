@@ -25,12 +25,12 @@ Control your Fellow Stagg EKG+ electric kettle from Home Assistant!
 2. Restart Home Assistant
 3. Go to Configuration > Integrations
 4. Click the "+ ADD INTEGRATION" button
-5. Search for "Fellow Stagg EKG+"
-6. Enter your kettle's IP address (default: 10.1.1.177)
+5. Search for "Fellow"
+6. Enter your kettle's IP address (find it in your router's client list)
 
 ## Requirements
 
-Your Stagg EKG+ must be running firmware version 1.1.76SSP CLI or compatible, which includes the HTTP CLI interface.
+Your Stagg EKG+ or EKG Pro must be on your WiFi network and expose the HTTP CLI interface (tested with EKG+ firmware 1.1.76SSP CLI; EKG Pro command differences are handled automatically).
 
 ## Usage
 
@@ -87,8 +87,8 @@ entities:
 
 ### Entities not updating
 
-The integration polls the kettle every 30 seconds. You can manually refresh by reloading the integration.
+The integration polls the kettle every 10 seconds by default (configurable 5-60 in the options). You can manually refresh by reloading the integration.
 
 ## Credits
 
-Based on reverse engineering of the Stagg EKG+ CLI interface.
+Based on reverse engineering of the Stagg EKG+ CLI interface; EKG Pro command set cross-checked against the stagg-ekg-pro project (https://github.com/montymhughes/stagg-ekg-pro).

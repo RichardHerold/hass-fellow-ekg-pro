@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-08-31
+
+Reliability rework targeting the Stagg EKG Pro, whose firmware formats
+responses and takes commands differently from the EKG+ this integration was
+originally written against.
+
+### Fixed
+- **Temperature parsing on the EKG Pro**: the parser no longer requires a
+  literal `C` suffix after temperature values. It now accepts suffixed or
+  bare values and resolves the unit from the suffix, the `units=` field, or
+  magnitude — this was the root cause of broken temperature entities on the
+  Pro.
+- Setting the temperature now uses `setsettingd settempr` (sets the
+  *active* target, verified on the Pro), then falls back to the legacy
+  `setsetting settempr`, then to dial emulation — each verified by
+  read-back.
+- A missing target temperature reads as unknown instead of 0°C.
+- A truncated response can no longer masquerade as a lifted kettle.
+- Config entries now have a unique ID (kettle MAC, host fallback), so the
+  same kettle can't be added twice and IP changes update the existing entry.
+- Status flags are parsed only from the `ketl=` line instead of matching
+  `ho`/`wd` anywhere in the response.
+- Documentation now matches the code (polling default, IP examples).
+
+### Changed
+- Keep-warm uses Hold mode (`ss S_Hold`); the unverified `warmon`/`warmoff`
+  commands are gone.
+- Setup no longer writes the display units to the kettle; unit syncing is
+  an opt-in option.
+- Device info (model, firmware version, MAC) is read from the kettle
+  instead of being hardcoded.
+- Default poll interval is 10 seconds, configurable 5–60 in options.
+- Setup starts with manual IP entry; the /24 network scan runs only when
+  explicitly chosen.
+- Low Water Warning is now the firmware's `nw` flag (was a temperature
+  heuristic) and, like Lifted, is disabled by default until verified.
+
+### Added
+- Diagnostics platform: download the last parsed state plus raw firmware
+  responses from the device page.
+- `examples/probe_kettle.py`: stdlib-only, read-only capture tool that
+  prints raw responses and per-field parser PASS/FAIL.
+- Advanced disabled-by-default "Heater Element (Direct)" switch exposing
+  `heaton`/`heatoff` GPIO control.
+- Boil Threshold diagnostic sensor (`temprB`).
+- Parser unit tests (`pytest tests/`) covering EKG+ and Pro response
+  shapes; no Home Assistant install needed.
+
+### Safety
+- The client refuses to send commands known to reboot or crash the kettle
+  (bare `ss`, `adcsamples`, `reset`); the example script's `reset()`
+  wrapper is removed.
+
 ## [2.0.0] - 2026-01-03
 
 ### Breaking Changes

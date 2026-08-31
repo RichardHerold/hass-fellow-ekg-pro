@@ -1,5 +1,47 @@
 # Stagg EKG+ Kettle Technical Specifications
 
+> **Provenance note:** the sections below were written against a single
+> Stagg EKG+ on firmware 1.1.76SSP CLI. The **Stagg EKG Pro differences**
+> section documents where the Pro deviates, based on the independent
+> [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro)
+> reverse-engineering effort. Treat everything here as observed behavior
+> of an undocumented debug interface, not a stable API.
+
+## ⚠️ NEVER SEND THESE COMMANDS
+
+| Command | Effect |
+|---------|--------|
+| `ss` (bare, no argument) | **Reboots the kettle** |
+| `adcsamples` | **Crashes the firmware** |
+| `reset` | Reboots the device |
+
+The integration's client refuses to send these. `heaton`/`heatoff` are not
+in this list but drive the heater element GPIO directly, bypassing the
+firmware state machine and its safety logic — prefer the `ss S_*` commands.
+
+## Stagg EKG Pro differences (verified on Pro hardware)
+
+- **Direct state control works:** `ss S_Heat` (start heating),
+  `ss S_Hold` (keep warm), `ss S_Off` (off). Always include the argument —
+  see the warning above.
+- **A real set-target command exists:** `setsettingd settempr <F>`
+  (note the `d`; Fahrenheit, decimals accepted, e.g. `203.0`) changes the
+  *active* target immediately — unlike the EKG+'s `setsetting settempr`,
+  which only saves a preference (see Method 2 below).
+  ```bash
+  curl -G --data-urlencode 'cmd=setsettingd settempr 203.0' 'http://<KETTLE_IP>/cli'
+  ```
+- **State output formatting differs:** temperature fields may appear
+  without a `C` unit suffix and internal values are Fahrenheit-based; the
+  `units=` field (0=F, 1=C) reflects the display setting only. Parsers
+  must not assume the EKG+'s `tempr=85.0 C` shape.
+- `setsetting hold <minutes>` (1–120) sets the keep-warm duration.
+- Additional modes appear: `S_Hold`, `S_Heat+menu` (menu overlay open),
+  and the `ketl=` flags line (`ho`/`wd`/`nw`/`ipb`/`bf`/`tr`).
+
+Use `examples/probe_kettle.py <KETTLE_IP>` to capture your firmware's
+exact output.
+
 ## Temperature Specifications
 
 ### Physical Limits

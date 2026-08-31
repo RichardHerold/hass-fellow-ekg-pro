@@ -20,7 +20,8 @@
    - Click on it to start setup
 
 4. **Configure**
-   - Enter your kettle's IP address (default: 192.168.1.100)
+   - Choose "Enter IP address" and type your kettle's IP (see below for
+     how to find it), or "Scan network"
    - Select your preferred temperature unit (Celsius or Fahrenheit)
    - Click Submit
 
@@ -39,21 +40,21 @@
 nmap -sn 192.168.1.0/24  # Adjust to your network range
 ```
 
-### Method 3: Try the default
-- The kettle is often at `192.168.1.100`
-- Try accessing `http://192.168.1.100/` in a browser
-- You should see firmware information
+### Method 3: Verify the address
+- Once you have a candidate IP, try `http://<KETTLE_IP>/cli?cmd=state` in a
+  browser — a kettle answers with a plain-text status containing `mode=`
+- Give the kettle a DHCP reservation so the address doesn't change
 
 ## Temperature Units
 
 The integration allows you to choose between Celsius and Fahrenheit:
 
-- **Celsius (units=1)**: Kettle displays °C
-- **Fahrenheit (units=0)**: Kettle displays °F
+- **Celsius (units=1)**: displayed in °C
+- **Fahrenheit (units=0)**: displayed in °F
 
-**Important**: The unit setting affects both:
-1. Your Home Assistant display
-2. The kettle's physical LCD display
+By default this only affects Home Assistant. Enable **Sync unit to the
+kettle's display** in the options if you also want the kettle's physical
+LCD to follow.
 
 You can change the unit later:
 1. Go to Settings → Devices & Services
@@ -99,12 +100,8 @@ After setup, you should see:
 
 ### Custom Polling Interval
 
-Edit `custom_components/fellow/__init__.py`:
-
-```python
-# Change this line (default is 30 seconds)
-update_interval=timedelta(seconds=30),
-```
+Settings → Devices & Services → Fellow → **Configure** → *Poll interval*.
+Default is 10 seconds; configurable from 5 to 60.
 
 ### Debug Logging
 
