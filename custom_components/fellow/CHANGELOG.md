@@ -15,6 +15,25 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.1.0] - 2026-08-31
+
+### Changed
+- **The network scan now asks which network to scan.** Previously it
+  guessed Home Assistant's own /24 (via a UDP-socket trick that picks the
+  wrong interface on container installs) and could never find a kettle on
+  a different subnet or IoT VLAN. The scan form is prefilled with Home
+  Assistant's real detected subnets (via the HA network helper) and
+  accepts any network up to /22 — enter the kettle's subnet (e.g.
+  `192.168.20.0/24`, or just an IP on it) to scan across VLANs, provided
+  the firewall allows HTTP from Home Assistant to that network.
+- A scan that finds nothing now says so explicitly instead of silently
+  dropping to manual entry.
+- Probe timeout raised from 1.5s to 3s — the kettle's HTTP server can
+  stall for seconds, causing missed detections.
+- Scan hits are validated with the integration's own response parser
+  (including a temperature field), so only kettles that setup validation
+  would accept are offered.
+
 ## [1.0.0] - 2026-08-31
 
 First release.
