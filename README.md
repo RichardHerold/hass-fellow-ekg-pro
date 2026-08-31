@@ -221,6 +221,7 @@ This is free and unencumbered software released into the public domain. See the 
 
 - Built for [Fellow](https://fellowproducts.com/) Stagg EKG WiFi kettles
 - Began as a fork of [rderewianko/fellow-ekg](https://github.com/rderewianko/fellow-ekg), then substantially rewritten for the EKG Pro
+- Took alot of design inspiration from [sopelj](https://github.com/sopelj/hass-ember-mug-component)
 - EKG Pro command set cross-checked against the [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro) reverse-engineering project
 - **Created with AI assistance** — developed with Claude Code
 
