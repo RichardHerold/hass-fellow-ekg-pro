@@ -172,24 +172,38 @@ class StaggEKGClient:
         """Parsed prtsettings output."""
         return parse_settings(self._send_command(CMD_PRTSETTINGS))
 
+    def _try_get_state(self) -> Optional[ParsedState]:
+        """Best-effort state read for control paths.
+
+        The kettle's HTTP server stalls past the read timeout while it's
+        busy (heating at full power, screen transitions), so a control
+        action must never die on a failed state read — the command itself
+        is what matters. Returns None when the kettle can't be read.
+        """
+        try:
+            return self.get_state()
+        except KettleTransientError as err:
+            _LOGGER.debug("State read failed (%s); continuing without it", err)
+            return None
+
     def start_heating(self) -> str:
         """Start a heating cycle via direct state command.
 
         `ss S_Heat` tells the firmware to enter the Heat state from any
-        starting state, so we don't need to wake the kettle first. We still
-        skip the command if the kettle is already heating to avoid
-        unnecessary chatter.
+        starting state, so we don't need to wake the kettle first. We skip
+        the command if the kettle is verifiably already heating; when the
+        state can't be read, we send the command anyway (it's idempotent).
         """
-        state = self.get_state()
-        if state.is_heating:
+        state = self._try_get_state()
+        if state is not None and state.is_heating:
             _LOGGER.debug("Kettle already heating, skipping start command")
             return "already heating"
         return self._send_command(CMD_HEAT)
 
     def start_hold(self) -> str:
         """Enter Hold (keep-warm) mode via direct state command."""
-        state = self.get_state()
-        if state.is_holding:
+        state = self._try_get_state()
+        if state is not None and state.is_holding:
             _LOGGER.debug("Kettle already holding, skipping hold command")
             return "already holding"
         return self._send_command(CMD_HOLD)
@@ -199,26 +213,48 @@ class StaggEKGClient:
 
         `ss S_Off` puts the firmware in the Off state directly. We retry
         and verify because some firmware revisions occasionally drop the
-        first command during a state transition.
+        first command during a state transition. Command-first: a failed
+        state read never blocks sending the stop command — the kettle is
+        busiest (and least responsive over HTTP) exactly when the user
+        wants it off.
         """
+        sent = False
+        last_error: Optional[Exception] = None
         for attempt in range(max_attempts):
-            state = self.get_state()
-            if not state.is_heating and not state.is_holding:
+            state = self._try_get_state()
+            if state is not None and not state.is_heating and not state.is_holding:
                 return "stopped"
 
             _LOGGER.debug(
                 "Sending stop command (attempt %d/%d, mode=%s)",
-                attempt + 1, max_attempts, state.mode,
+                attempt + 1, max_attempts, state.mode if state else "unknown",
             )
-            self._send_command(CMD_OFF)
+            try:
+                self._send_command(CMD_OFF)
+                sent = True
+            except KettleTransientError as err:
+                last_error = err
+                _LOGGER.debug("Stop command attempt %d failed: %s", attempt + 1, err)
             time.sleep(0.5)
 
-        # Final check
-        state = self.get_state()
-        if state.is_heating or state.is_holding:
+        if not sent:
+            # Every send failed — the kettle is genuinely unreachable, so
+            # surface that instead of pretending it stopped.
+            raise last_error if last_error is not None else KettleTimeoutError(
+                "Kettle unreachable while sending stop command"
+            )
+
+        # Final best-effort check
+        state = self._try_get_state()
+        if state is not None and (state.is_heating or state.is_holding):
             _LOGGER.error(
                 "Failed to stop kettle after %d attempts (mode=%s)",
                 max_attempts, state.mode,
+            )
+        elif state is None:
+            _LOGGER.warning(
+                "Stop command sent but the kettle didn't answer the "
+                "verification read; check the next poll for its state"
             )
         return "stopped"
 

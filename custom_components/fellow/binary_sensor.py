@@ -25,6 +25,7 @@ async def async_setup_entry(
 
     entities = [
         StaggEKGPowerBinarySensor(coordinator, entry),
+        StaggEKGWaterReadyBinarySensor(coordinator, entry),
         StaggEKGWaterBinarySensor(coordinator, entry),
         StaggEKGLiftedBinarySensor(coordinator, entry),
     ]
@@ -81,6 +82,30 @@ class StaggEKGPowerBinarySensor(StaggEKGBinarySensorBase):
             "screen": state.screen_name,
             "in_menu": state.is_in_menu,
         }
+
+
+class StaggEKGWaterReadyBinarySensor(StaggEKGBinarySensorBase):
+    """On while an active heat/hold cycle is at its target temperature.
+
+    The trigger for "notify me when the water is ready": fires on the
+    rising edge as the water reaches temperature, clears when the kettle
+    turns off or a new cycle starts from cold.
+    """
+
+    _attr_icon = "mdi:cup-water"
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_water_ready"
+        self._attr_name = "Water Ready"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true while the water is at target in an active cycle."""
+        return self.coordinator.water_ready
 
 
 class StaggEKGLiftedBinarySensor(StaggEKGBinarySensorBase):

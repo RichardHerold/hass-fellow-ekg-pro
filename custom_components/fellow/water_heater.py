@@ -4,13 +4,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import voluptuous as vol
+
 from homeassistant.components.water_heater import (
     WaterHeaterEntity,
     WaterHeaterEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -22,6 +25,7 @@ from .const import (
     MAX_TEMP_F,
     MIN_TEMP_C,
     MIN_TEMP_F,
+    SERVICE_HEAT_TO,
     UNIT_CELSIUS,
     UNIT_FAHRENHEIT,
 )
@@ -43,6 +47,15 @@ async def async_setup_entry(
     coordinator: StaggEKGDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     async_add_entities([StaggEKGWaterHeater(coordinator, entry)])
+
+    # fellow.heat_to: set the target and start heating in one action —
+    # the call automations and dashboards actually want.
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_HEAT_TO,
+        {vol.Required(ATTR_TEMPERATURE): vol.Coerce(float)},
+        "async_heat_to",
+    )
 
 
 class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
@@ -116,10 +129,11 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             return OPERATION_MODE_OFF
         elif state.is_heating:
             return OPERATION_MODE_HEAT
-        elif state.warming or state.is_holding:
+        elif state.is_holding:
+            # Mode-based only: the wd flag means wind-down, not keep-warm.
             return OPERATION_MODE_WARM
         else:
-            # S_Standby, S_HeatOff without warming = effectively off
+            # S_Standby, S_HeatOff without holding = effectively off
             return OPERATION_MODE_OFF
 
     @property
@@ -149,6 +163,25 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             self.coordinator.client.set_temperature, temp_celsius
         )
 
+        await self.coordinator.async_request_refresh()
+
+    async def async_heat_to(self, temperature: float) -> None:
+        """Set the target temperature and start heating, in one action.
+
+        The temperature is interpreted in this entity's display unit,
+        matching set_temperature semantics.
+        """
+        if self._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT:
+            temp_celsius = (temperature - 32) * 5 / 9
+        else:
+            temp_celsius = temperature
+
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.set_temperature, temp_celsius
+        )
+        await self.hass.async_add_executor_job(
+            self.coordinator.client.start_heating
+        )
         await self.coordinator.async_request_refresh()
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:

@@ -15,10 +15,12 @@ from homeassistant.helpers.device_registry import format_mac
 
 from .const import (
     CONF_POLL_INTERVAL,
+    CONF_PRESETS,
     CONF_SYNC_UNITS,
     CONF_TEMP_SET_METHOD,
     CONF_TEMPERATURE_UNIT,
     DEFAULT_POLL_INTERVAL,
+    DEFAULT_PRESETS,
     DEFAULT_SYNC_UNITS,
     DOMAIN,
     MAX_POLL_INTERVAL,
@@ -31,6 +33,7 @@ from .const import (
 from .discovery import default_scan_networks, discover_kettles, parse_scan_network
 from .kettle import StaggEKGClient
 from .parser import state_problems
+from .presets import parse_preset_list
 
 CONF_NETWORK = "network"
 
@@ -242,23 +245,33 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             new_unit = user_input[CONF_TEMPERATURE_UNIT]
             current_unit = self._current(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
 
-            # Only touch the physical kettle's display when the user opted
-            # into unit syncing and actually changed the unit.
-            if user_input.get(CONF_SYNC_UNITS) and new_unit != current_unit:
-                client = StaggEKGClient(host=self.config_entry.data[CONF_HOST])
-                try:
-                    if new_unit == UNIT_CELSIUS:
-                        await self.hass.async_add_executor_job(client.set_units_celsius)
-                    else:
-                        await self.hass.async_add_executor_job(client.set_units_fahrenheit)
-                except Exception as err:
-                    _LOGGER.error("Failed to update kettle units: %s", err)
+            try:
+                parse_preset_list(
+                    user_input.get(CONF_PRESETS, ""),
+                    fahrenheit=new_unit == UNIT_FAHRENHEIT,
+                )
+            except ValueError:
+                errors["base"] = "invalid_presets"
 
-            return self.async_create_entry(title="", data=user_input)
+            if not errors:
+                # Only touch the physical kettle's display when the user
+                # opted into unit syncing and actually changed the unit.
+                if user_input.get(CONF_SYNC_UNITS) and new_unit != current_unit:
+                    client = StaggEKGClient(host=self.config_entry.data[CONF_HOST])
+                    try:
+                        if new_unit == UNIT_CELSIUS:
+                            await self.hass.async_add_executor_job(client.set_units_celsius)
+                        else:
+                            await self.hass.async_add_executor_job(client.set_units_fahrenheit)
+                    except Exception as err:
+                        _LOGGER.error("Failed to update kettle units: %s", err)
+
+                return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
             step_id="init",
@@ -283,8 +296,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_SYNC_UNITS,
                         default=self._current(CONF_SYNC_UNITS, DEFAULT_SYNC_UNITS),
                     ): bool,
+                    vol.Optional(
+                        CONF_PRESETS,
+                        default=self._current(CONF_PRESETS, DEFAULT_PRESETS),
+                    ): str,
                 }
             ),
+            errors=errors,
         )
 
 

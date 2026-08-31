@@ -25,6 +25,13 @@ MAX_POLL_INTERVAL = 60
 
 DEFAULT_SYNC_UNITS = False
 
+# User-defined temperature presets ("Name: temp" pairs, see presets.py)
+CONF_PRESETS = "presets"
+DEFAULT_PRESETS = ""
+
+# Custom action: set target and start heating in one call
+SERVICE_HEAT_TO = "heat_to"
+
 # Temperature limits
 MIN_TEMP_C = 40  # Minimum kettle can be set to
 MAX_TEMP_C = 100  # Maximum (boiling point)

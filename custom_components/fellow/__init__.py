@@ -20,6 +20,7 @@ from .const import (
     TEMP_METHOD_DIRECT,
 )
 from .kettle import KettleTransientError, StaggEKGClient
+from .parser import is_water_ready
 
 # After this many consecutive transient failures, give up holding the
 # last known state and let HA mark the device unavailable. At the default
@@ -35,7 +36,13 @@ LIFT_COOLDOWN_SECONDS = 90
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.WATER_HEATER, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.WATER_HEATER,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -120,6 +127,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         """Initialize."""
         self.client = client
         self.device_info: DeviceInfo | None = None
+        self.water_ready: bool = False
         self._consecutive_transient_failures = 0
         self._was_docked: bool | None = None
         self._lifted_at = None
@@ -182,5 +190,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             if self._was_docked and not state.is_docked:
                 self._lifted_at = dt_util.utcnow()
             self._was_docked = state.is_docked
+
+        self.water_ready = is_water_ready(state)
 
         return {"state": state}

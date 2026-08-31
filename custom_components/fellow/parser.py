@@ -169,7 +169,12 @@ class ParsedState:
 
     @property
     def warming(self) -> bool:
-        """Keep-warm flag from the ketl= line (wd), if reported."""
+        """The ketl= line's `wd` flag, if reported.
+
+        Documented as "wind-down" on the EKG Pro — NOT keep-warm; it can be
+        set during ordinary heating. Entities key keep-warm off `is_holding`
+        (Hold mode); this flag is exposed for diagnostics only.
+        """
         return bool(self.flags.get("wd", 0))
 
     @property
@@ -232,6 +237,25 @@ def parse_state(text: str) -> ParsedState:
         temp_field_present=temp_field_present,
         raw=text,
     )
+
+
+# The water counts as ready within this margin of the target (the kettle's
+# own display precision is 1F ≈ 0.6C, and readings wobble a little).
+READY_MARGIN_C = 1.0
+
+
+def is_water_ready(state: "ParsedState") -> bool:
+    """Whether an active heat/hold cycle has reached its target.
+
+    True only during an active cycle: a cold kettle whose target happens to
+    be low, or an off kettle with hot water in it, is not "ready" — ready
+    means the kettle is doing something and the water is at temperature.
+    """
+    if not (state.is_heating or state.is_holding):
+        return False
+    if state.current_temp_c is None or state.target_temp_c is None:
+        return False
+    return state.current_temp_c >= state.target_temp_c - READY_MARGIN_C
 
 
 def state_problems(state: "ParsedState") -> list:
