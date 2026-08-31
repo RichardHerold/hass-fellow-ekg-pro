@@ -21,7 +21,10 @@ import requests
 import re
 from typing import Optional
 
-from .parser import (  # noqa: F401 - errors re-exported for callers
+# KettleResponseError is re-exported for callers even though this module
+# doesn't raise it directly.
+from .parser import (  # noqa: F401  # pylint: disable=unused-import
+    KettleCommandError,
     KettleResponseError,
     KettleTimeoutError,
     KettleTransientError,
@@ -134,7 +137,7 @@ class StaggEKGClient:
                     )
                     time.sleep(0.5)
             except requests.exceptions.RequestException as e:
-                raise Exception(f"Failed to send command '{cmd}': {e}")
+                raise KettleCommandError(f"Failed to send command '{cmd}': {e}") from e
 
         raise KettleTimeoutError(
             f"Kettle did not respond to '{cmd}' after {retries + 1} attempts: {last_timeout}"

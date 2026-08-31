@@ -73,6 +73,19 @@
       "invalid_presets": "Presets must be 'Name: temperature' pairs separated by commas, within 40-100 °C (104-212 °F), with unique names — e.g. 'Pour-over: 96, Green tea: 79'."
     }
   },
+  "entity": {
+    "sensor": {
+      "kettle_state": {
+        "name": "Kettle State",
+        "state": {
+          "off": "Off",
+          "heating": "Heating",
+          "at_temperature": "At temperature",
+          "keeping_warm": "Keeping warm"
+        }
+      }
+    }
+  },
   "selector": {
     "temperature_unit": {
       "options": {

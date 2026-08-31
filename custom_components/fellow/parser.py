@@ -43,6 +43,10 @@ class KettleResponseError(KettleTransientError):
     """Raised when the kettle's response can't be parsed (missing fields)."""
 
 
+class KettleCommandError(Exception):
+    """A command could not be delivered for a non-transient reason."""
+
+
 # Plausible water-temperature window (Celsius). Values outside it are
 # treated as sentinels the firmware emits when the kettle is off the base
 # or the ADC reads garbage.
@@ -80,7 +84,7 @@ SETTING_LINE_RE = re.compile(r"^\s*(?:st:\s*)?(\w+)\s*=\s*(.+?)\s*$", re.MULTILI
 # Warn about magnitude-based unit inference only once per process — it means
 # we're guessing and want a capture of the real response, but repeating the
 # warning every 10s poll would flood the log.
-_warned_magnitude_inference = False
+_warned_magnitude_inference = False  # pylint: disable=invalid-name
 
 
 def _to_celsius(
@@ -258,6 +262,28 @@ def is_water_ready(state: "ParsedState") -> bool:
     return state.current_temp_c >= state.target_temp_c - READY_MARGIN_C
 
 
+# Display-state options for the Kettle State enum sensor (Ember-mug-style
+# lifecycle: one glanceable value instead of a raw firmware mode).
+KETTLE_STATE_OPTIONS = ["off", "heating", "at_temperature", "keeping_warm"]
+
+
+def kettle_display_state(state: "ParsedState") -> str:
+    """Collapse the firmware state into a user-facing lifecycle value.
+
+    "at_temperature" wins over heating/keeping_warm: an active cycle whose
+    water is at target is the ready state, whether the mode is Heat or
+    Hold. Unknown/transitional modes read as "off", matching the water
+    heater's fallback.
+    """
+    if is_water_ready(state):
+        return "at_temperature"
+    if state.is_heating:
+        return "heating"
+    if state.is_holding:
+        return "keeping_warm"
+    return "off"
+
+
 def state_problems(state: "ParsedState") -> list:
     """Explain why a parsed state is not good enough to run the integration.
 
@@ -300,6 +326,4 @@ def parse_settings(text: str) -> dict:
     Lines look like ``st: hold=15`` on some firmwares and ``hold=15`` on
     others; both are accepted.
     """
-    return {
-        key: value for key, value in SETTING_LINE_RE.findall(text)
-    }
+    return dict(SETTING_LINE_RE.findall(text))

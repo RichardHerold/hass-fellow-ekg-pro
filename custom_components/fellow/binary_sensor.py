@@ -8,6 +8,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -25,10 +26,18 @@ async def async_setup_entry(
 
     entities = [
         StaggEKGPowerBinarySensor(coordinator, entry),
-        StaggEKGWaterReadyBinarySensor(coordinator, entry),
         StaggEKGWaterBinarySensor(coordinator, entry),
         StaggEKGLiftedBinarySensor(coordinator, entry),
     ]
+
+    # The Water Ready binary sensor was replaced by the Kettle State enum
+    # sensor; drop its registry entry so it doesn't linger as an orphan.
+    registry = er.async_get(hass)
+    stale = registry.async_get_entity_id(
+        "binary_sensor", DOMAIN, f"{entry.entry_id}_water_ready"
+    )
+    if stale:
+        registry.async_remove(stale)
 
     async_add_entities(entities)
 
@@ -82,30 +91,6 @@ class StaggEKGPowerBinarySensor(StaggEKGBinarySensorBase):
             "screen": state.screen_name,
             "in_menu": state.is_in_menu,
         }
-
-
-class StaggEKGWaterReadyBinarySensor(StaggEKGBinarySensorBase):
-    """On while an active heat/hold cycle is at its target temperature.
-
-    The trigger for "notify me when the water is ready": fires on the
-    rising edge as the water reaches temperature, clears when the kettle
-    turns off or a new cycle starts from cold.
-    """
-
-    _attr_icon = "mdi:cup-water"
-
-    def __init__(
-        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
-    ) -> None:
-        """Initialize the binary sensor."""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_water_ready"
-        self._attr_name = "Water Ready"
-
-    @property
-    def is_on(self) -> bool:
-        """Return true while the water is at target in an active cycle."""
-        return self.coordinator.water_ready
 
 
 class StaggEKGLiftedBinarySensor(StaggEKGBinarySensorBase):

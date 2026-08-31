@@ -59,7 +59,11 @@ class KettleState:
         temp_unit = "°C" if self.units == 1 else "°F"
         current = f"{self.current_temp_c}°C" if self.current_temp_c else "N/A"
         water_status = " [LOW WATER WARNING]" if self.may_have_no_water else ""
-        return f"Mode: {self.mode}, Current: {current}, Target: {self.set_temp_c}°C ({self.set_temp_f}°F), Time: {self.clock}, Display Unit: {temp_unit}{water_status}"
+        return (
+            f"Mode: {self.mode}, Current: {current}, "
+            f"Target: {self.set_temp_c}°C ({self.set_temp_f}°F), "
+            f"Time: {self.clock}, Display Unit: {temp_unit}{water_status}"
+        )
 
 
 class StaggEKGClient:
@@ -95,7 +99,7 @@ class StaggEKGClient:
             response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to send command '{cmd}': {e}")
+            raise RuntimeError(f"Failed to send command '{cmd}': {e}") from e
 
     def get_state(self) -> KettleState:
         """
@@ -335,11 +339,10 @@ class StaggEKGClient:
                 self._send_command("right")
                 time.sleep(0.1)
             return f"Increased temperature by {temp_diff:.1f}°C to {target_celsius}°C"
-        else:
-            for _ in range(abs(steps)):
-                self._send_command("left")
-                time.sleep(0.1)
-            return f"Decreased temperature by {abs(temp_diff):.1f}°C to {target_celsius}°C"
+        for _ in range(abs(steps)):
+            self._send_command("left")
+            time.sleep(0.1)
+        return f"Decreased temperature by {abs(temp_diff):.1f}°C to {target_celsius}°C"
 
     def heat_to_temperature(self, target_celsius: float) -> str:
         """

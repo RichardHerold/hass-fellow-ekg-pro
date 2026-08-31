@@ -22,7 +22,7 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 |--------|------|---------|
 | Kettle | Water Heater | Main control: target temperature, off/heat/warm; supports the `fellow.heat_to` action |
 | Boil / your presets | Buttons | One tap: set target and start heating (presets configurable in options) |
-| Water Ready | Binary Sensor | On while an active cycle is at target — trigger "ready" notifications on it |
+| Kettle State | Sensor (enum) | Lifecycle at a glance: Off / Heating / At temperature / Keeping warm (raw firmware mode as attribute) |
 | Time to Ready | Sensor | Estimated minutes until target while heating (from the live heating rate) |
 | Hold Duration | Number (config) | How long keep-warm stays on before auto-off (1–120 min) |
 | Chime Volume | Number (config) | Kettle chime level, 0 = silent — automatable for quiet hours |
@@ -112,14 +112,14 @@ automation:
           temperature: 95
 ```
 
-**Notify when the water is ready** — trigger on the Water Ready sensor:
+**Notify when the water is ready** — trigger on the Kettle State sensor reaching `at_temperature`:
 ```yaml
 automation:
   - alias: "Water ready"
     trigger:
       - platform: state
-        entity_id: binary_sensor.fellow_water_ready
-        to: "on"
+        entity_id: sensor.fellow_kettle_state
+        to: "at_temperature"
     action:
       - service: notify.mobile_app
         data:

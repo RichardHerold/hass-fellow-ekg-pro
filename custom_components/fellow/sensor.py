@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import StaggEKGDataUpdateCoordinator
 from .const import DOMAIN
+from .parser import KETTLE_STATE_OPTIONS, kettle_display_state
 
 
 async def async_setup_entry(
@@ -25,6 +26,7 @@ async def async_setup_entry(
     coordinator: StaggEKGDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities = [
+        StaggEKGKettleStateSensor(coordinator, entry),
         StaggEKGCurrentTempSensor(coordinator, entry),
         StaggEKGTargetTempSensor(coordinator, entry),
         StaggEKGModeSensor(coordinator, entry),
@@ -52,6 +54,47 @@ class StaggEKGSensorBase(CoordinatorEntity, SensorEntity):
         if self.coordinator.data and "state" in self.coordinator.data:
             return self.coordinator.data["state"]
         return None
+
+
+class StaggEKGKettleStateSensor(StaggEKGSensorBase):
+    """Ember-mug-style lifecycle state: off / heating / at temperature /
+    keeping warm — one glanceable value with per-state icons; the raw
+    firmware mode stays available as an attribute."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = KETTLE_STATE_OPTIONS
+    _attr_translation_key = "kettle_state"
+
+    _ICONS = {
+        "off": "mdi:kettle-outline",
+        "heating": "mdi:kettle-steam",
+        "at_temperature": "mdi:cup-water",
+        "keeping_warm": "mdi:heat-wave",
+    }
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_kettle_state"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the lifecycle state."""
+        state = self._state
+        return kettle_display_state(state) if state else None
+
+    @property
+    def icon(self) -> str:
+        """Icon per lifecycle state."""
+        return self._ICONS.get(self.native_value or "", "mdi:kettle")
+
+    @property
+    def extra_state_attributes(self):
+        """Expose the raw firmware mode, Ember-style."""
+        state = self._state
+        return {"raw_mode": state.mode} if state else {}
 
 
 class StaggEKGCurrentTempSensor(StaggEKGSensorBase):
