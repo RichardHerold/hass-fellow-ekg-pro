@@ -15,6 +15,22 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.7.0] - 2026-08-31
+
+Second borrowing pass from the Ember Mug integration's entity patterns.
+
+### Added
+- **Set Target number** (slider): set the target temperature *without*
+  starting heating — the counterpart to `heat_to` and the preset
+  buttons, which always start a cycle.
+- **Kettle Display Unit select**: flip the °C/°F shown on the kettle's
+  own screen as a first-class entity, reflecting changes made on the
+  kettle within one poll.
+- **Identify button** (diagnostic, disabled by default): a short fixed
+  buzzer chirp to confirm which kettle Home Assistant is talking to.
+  The buzzer command is documented but unverified on all firmwares —
+  enable, press, and keep it if the kettle chirps.
+
 ## [1.6.0] - 2026-08-31
 
 ### Added

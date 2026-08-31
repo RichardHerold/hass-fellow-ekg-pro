@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
@@ -61,6 +61,7 @@ async def async_setup_entry(
     for name, temp_c in presets:
         entities.append(StaggEKGPresetButton(coordinator, entry, name, temp_c))
     entities.append(StaggEKGSyncClockButton(coordinator, entry))
+    entities.append(StaggEKGIdentifyButton(coordinator, entry))
 
     # Drop registry entries for presets that were removed or renamed, so
     # stale buttons don't linger as unavailable entities.
@@ -136,3 +137,30 @@ class StaggEKGSyncClockButton(CoordinatorEntity, ButtonEntity):
         await self.hass.async_add_executor_job(
             self.coordinator.client.set_clock, local.hour, local.minute, local.second
         )
+
+
+class StaggEKGIdentifyButton(CoordinatorEntity, ButtonEntity):
+    """Chirp the kettle's buzzer to confirm which device this is.
+
+    The buzzer command is documented in the reverse-engineering notes but
+    not yet verified on every firmware, so this ships disabled by default;
+    enable it, press it, and if the kettle chirps it's safe to keep on.
+    """
+
+    _attr_device_class = ButtonDeviceClass.IDENTIFY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self, coordinator: StaggEKGDataUpdateCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._attr_has_entity_name = True
+        self._attr_device_info = coordinator.device_info
+        self._attr_unique_id = f"{entry.entry_id}_identify"
+        self._attr_name = "Identify"
+
+    async def async_press(self) -> None:
+        """Chirp the buzzer."""
+        await self.hass.async_add_executor_job(self.coordinator.client.identify)

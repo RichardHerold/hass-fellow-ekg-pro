@@ -71,6 +71,10 @@ CMD_UNITS_F = "setunitsf"
 CMD_DIAL_LEFT = "left"
 CMD_DIAL_RIGHT = "right"
 CMD_PRESS_DIAL = "2"
+# Short buzzer chirp for the Identify button. Frequency/duty taken from the
+# documented working example (buz 1000 4000 500); fixed values only so
+# nothing can drive the buzzer PWM out of spec.
+CMD_IDENTIFY = "buz 1000 4000 200"
 # Direct heater-element GPIO, bypassing the firmware state machine.
 CMD_HEATER_GPIO_ON = "heaton"
 CMD_HEATER_GPIO_OFF = "heatoff"
@@ -278,6 +282,11 @@ class StaggEKGClient:
         Counterpart of heat_on(); bypasses the firmware state machine.
         """
         return self._send_command(CMD_HEATER_GPIO_OFF)
+
+    def identify(self) -> str:
+        """Chirp the buzzer briefly so the user can tell which kettle
+        this is. Unverified on some firmwares; harmless if unsupported."""
+        return self._send_command(CMD_IDENTIFY)
 
     def set_hold_minutes(self, minutes: int) -> str:
         """Set the keep-warm hold duration (1-120 minutes)."""

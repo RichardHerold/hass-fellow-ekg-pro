@@ -74,6 +74,15 @@
     }
   },
   "entity": {
+    "select": {
+      "display_unit": {
+        "name": "Kettle Display Unit",
+        "state": {
+          "celsius": "Celsius (°C)",
+          "fahrenheit": "Fahrenheit (°F)"
+        }
+      }
+    },
     "sensor": {
       "kettle_state": {
         "name": "Kettle State",

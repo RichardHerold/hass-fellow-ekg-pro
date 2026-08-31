@@ -31,6 +31,9 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 | Current Temperature | Sensor | Real-time water temperature |
 | Target Temperature | Sensor | Target temperature setting |
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
+| Set Target | Number (slider) | Set the target temperature **without** starting heating (the sensor above reports; this controls) |
+| Kettle Display Unit | Select (config) | Flip the °C/°F shown on the kettle's own screen |
+| Identify | Button (diagnostic, disabled by default) | Chirp the buzzer to confirm which kettle this is (enable and test; unverified on all firmwares) |
 | Heating | Switch | Start/stop a heating cycle (heats to target, then off) |
 | Warming | Switch | Keep-warm (Hold mode: heats to target and stays there) |
 | Power | Binary Sensor | Power on/off status |
