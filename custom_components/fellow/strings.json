@@ -21,7 +21,11 @@
         "description": "Select a discovered kettle.",
         "data": {
           "host": "Kettle",
-          "temperature_unit": "Temperature Unit"
+          "temperature_unit": "Temperature Unit",
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Device name (also the entity-ID prefix). Leave blank to use the kettle's detected model name."
         }
       },
       "manual": {
@@ -29,7 +33,11 @@
         "description": "Enter the IP address of your kettle and select your preferred temperature unit for Home Assistant.",
         "data": {
           "host": "IP Address",
-          "temperature_unit": "Temperature Unit"
+          "temperature_unit": "Temperature Unit",
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Device name (also the entity-ID prefix). Leave blank to use the kettle's detected model name."
         }
       }
     },

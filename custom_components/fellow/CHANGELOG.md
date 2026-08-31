@@ -15,6 +15,18 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.7.1] - 2026-08-31
+
+### Changed
+- **Friendlier default device name.** Setup no longer titles the device
+  `Fellow Stagg EKG (<ip>)` (which produced entity IDs like
+  `sensor.fellow_stagg_ekg_192_168_30_69_…`). The setup forms gain an
+  optional **Name** field; left blank, the device is named after the
+  kettle's detected model (from `fwinfo`, e.g. "Stagg EKG Pro"),
+  falling back to "Fellow Kettle". Existing devices aren't renamed —
+  use the pencil icon on the device page (Home Assistant offers to
+  update entity IDs at the same time).
+
 ## [1.7.0] - 2026-08-31
 
 Second borrowing pass from the Ember Mug integration's entity patterns.

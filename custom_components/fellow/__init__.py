@@ -81,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.device_info = DeviceInfo(
         identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
         connections={(dr.CONNECTION_NETWORK_MAC, format_mac(mac))} if mac else set(),
-        name=entry.title or "Fellow Stagg EKG",
+        name=entry.title or "Fellow Kettle",
         manufacturer="Fellow",
         model=fw_info.get("project") or "Stagg EKG (WiFi)",
         sw_version=fw_info.get("version"),

@@ -7,7 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
@@ -38,7 +38,7 @@ from .const import (
 )
 from .discovery import default_scan_networks, discover_kettles, parse_scan_network
 from .kettle import StaggEKGClient
-from .parser import state_problems
+from .parser import prettify_model_name, state_problems
 from .presets import parse_preset_list
 
 CONF_NETWORK = "network"
@@ -51,6 +51,7 @@ STEP_MANUAL_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_TEMPERATURE_UNIT, default=UNIT_CELSIUS): vol.In(
             [UNIT_CELSIUS, UNIT_FAHRENHEIT]
         ),
+        vol.Optional(CONF_NAME): str,
     }
 )
 
@@ -93,10 +94,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         )
         raise IncompleteResponse
 
-    # Best-effort MAC for a stable unique ID (survives IP changes).
+    # Best-effort MAC for a stable unique ID (survives IP changes), and
+    # firmware info so the default device name can be the actual model.
     mac = await hass.async_add_executor_job(client.get_mac)
+    fw_info = await hass.async_add_executor_job(client.get_firmware_info)
+    suggested_name = prettify_model_name(fw_info.get("project")) or "Fellow Kettle"
 
-    return {"title": f"Fellow Stagg EKG ({data[CONF_HOST]})", "mac": mac}
+    return {"mac": mac, "suggested_name": suggested_name}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -149,7 +153,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured(updates={CONF_HOST: data[CONF_HOST]})
 
-        return self.async_create_entry(title=info["title"], data=data)
+        # The entry title becomes the device name and the entity-ID prefix:
+        # the user's typed name wins, else the kettle's detected model.
+        typed_name = (data.pop(CONF_NAME, "") or "").strip()
+        title = typed_name or info["suggested_name"]
+
+        return self.async_create_entry(title=title, data=data)
 
     async def async_step_pick(
         self, user_input: dict[str, Any] | None = None
@@ -197,6 +206,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data = {
                 CONF_HOST: user_input[CONF_HOST],
                 CONF_TEMPERATURE_UNIT: user_input[CONF_TEMPERATURE_UNIT],
+                CONF_NAME: user_input.get(CONF_NAME, ""),
             }
             result = await self._async_validate_and_create(data, errors)
             if result is not None:
@@ -212,6 +222,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(
                         CONF_TEMPERATURE_UNIT, default=UNIT_CELSIUS
                     ): vol.In([UNIT_CELSIUS, UNIT_FAHRENHEIT]),
+                    vol.Optional(CONF_NAME): str,
                 }
             ),
             errors=errors,

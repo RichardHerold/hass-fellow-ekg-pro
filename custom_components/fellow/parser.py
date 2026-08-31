@@ -304,6 +304,28 @@ def state_problems(state: "ParsedState") -> list:
     return problems
 
 
+# Tokens kept fully uppercase when prettifying firmware model names.
+_UPPER_TOKENS = {"EKG", "SSP", "WIFI"}
+
+
+def prettify_model_name(raw: Optional[str]) -> Optional[str]:
+    """Turn a firmware project identifier into a human device name.
+
+    e.g. 'stagg_ekg_pro' -> 'Stagg EKG Pro'. Returns None for blank or
+    unusable input so callers can fall back to a generic name.
+    """
+    if not raw:
+        return None
+    cleaned = "".join(ch for ch in raw if ch.isprintable()).strip()
+    words = [w for w in re.split(r"[\s_\-]+", cleaned) if w]
+    if not words:
+        return None
+    pretty = " ".join(
+        w.upper() if w.upper() in _UPPER_TOKENS else w.capitalize() for w in words
+    )
+    return pretty[:40].strip()
+
+
 def parse_fwinfo(text: str) -> dict:
     """Extract whatever firmware metadata is recognizable in fwinfo output."""
     info: dict = {}
