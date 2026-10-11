@@ -34,6 +34,15 @@ SCAN_INTERVAL = timedelta(hours=12)
 RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
 
+# This entity announces updates; it cannot install them (an integration
+# can't safely overwrite its own files while running). Say so wherever
+# the update dialog shows text, or the card reads as broken.
+INSTALL_HINT = (
+    "⬆️ Install via HACS (HACS → Fellow → Update), then restart Home "
+    "Assistant — this card only announces releases and cannot install them."
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -103,8 +112,12 @@ class StaggEKGIntegrationUpdate(UpdateEntity):
         version, release_url, summary = parsed
         self._attr_latest_version = version
         self._attr_release_url = release_url or None
-        self._attr_release_summary = summary or None
-        self._release_notes = (data.get("body") or "").strip() or None
+        # release_summary is capped at 255 chars by HA — the hint alone
+        # fits and is the one thing the card must say; the dialog's full
+        # release notes carry the hint plus the actual notes.
+        self._attr_release_summary = INSTALL_HINT
+        body = (data.get("body") or "").strip() or summary
+        self._release_notes = f"{INSTALL_HINT}\n\n---\n\n{body}" if body else INSTALL_HINT
 
     async def async_release_notes(self) -> str | None:
         """Full release notes for the Settings → Updates dialog."""

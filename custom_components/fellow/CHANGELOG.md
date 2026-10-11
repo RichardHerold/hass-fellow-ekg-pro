@@ -15,6 +15,16 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.7.3] - 2026-10-11
+
+### Changed
+- **The Integration Update card now says how to install.** The entity
+  announces new releases but cannot install them (an integration can't
+  overwrite its own files while running), which read as "not
+  installable" when tapped. The update card and its release-notes
+  dialog now lead with: install via HACS (HACS → Fellow → Update),
+  then restart Home Assistant.
+
 ## [1.7.2] - 2026-10-11
 
 Resilience release for the kettle firmware's web-server wedge — the kettle
