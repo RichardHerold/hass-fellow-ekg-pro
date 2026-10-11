@@ -192,6 +192,19 @@ Settings → Devices & Services → Fellow → device page → **Download diagno
 3. Ensure Home Assistant can reach the kettle's network — if the kettle is on another subnet or IoT VLAN, the firewall must allow HTTP (port 80) from Home Assistant to it; point the network scan at the kettle's subnet, not Home Assistant's
 4. Try `curl 'http://<KETTLE_IP>/cli?cmd=state'` from another machine
 
+### Entities unavailable: ping works but curl hangs → power-cycle the kettle
+
+The known failure signature of the kettle's firmware:
+
+```bash
+ping <KETTLE_IP>                            # answers
+curl -m 5 'http://<KETTLE_IP>/cli?cmd=state'  # hangs / connect timeout
+```
+
+means the kettle is on WiFi but its ESP32 web server has wedged and stopped accepting TCP connections — observed especially after long or back-to-back heating sessions. **Unplug the kettle's base for ~10 seconds and plug it back in**; entities recover automatically within ~30 seconds (the integration never stops retrying). This is a kettle-firmware limitation, not fixable from Home Assistant; also check the Fellow app for firmware updates.
+
+The integration helps in two ways: while the kettle is unreachable it automatically slows its polling (up to 60s between attempts) so a struggling firmware isn't pinned down by connect attempts, and after ~5 minutes it raises an issue in **Settings → Repairs** describing exactly this fix. The Repair clears itself when the kettle answers again.
+
 ### Setting temperature doesn't stick
 
 The integration tries `setsettingd settempr` (EKG Pro), then the legacy `setsetting settempr` (EKG+), then dial emulation, verifying each by read-back. If it always ends up dialing, switch the *Temperature-setting method* option to *Dial emulation* to skip the probes. Check debug logs to see which path was used.

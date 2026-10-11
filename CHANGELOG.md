@@ -15,6 +15,34 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.7.2] - 2026-10-11
+
+Resilience release for the kettle firmware's web-server wedge — the kettle
+stays on WiFi (answers ping) but port 80 stops accepting connections,
+typically after long or back-to-back heating sessions, leaving all
+entities unavailable until the kettle is power-cycled.
+
+### Changed
+- **Unreachable back-off**: while polls fail, the update interval
+  stretches (doubling after a 2-failure grace, capped at 60s) instead of
+  hammering a struggling firmware with connect attempts every few
+  seconds; it snaps back to normal on the first successful poll.
+
+### Added
+- **Repairs issue**: after ~5 minutes continuously unreachable, a
+  warning appears in Settings → Repairs naming the failure signature
+  (ping OK, port 80 dead) and the fix (power-cycle the kettle's base).
+  It clears itself when the kettle answers again.
+- README troubleshooting entry for this exact signature.
+
+### Fixed
+- **The test suite is now actually in the repository.** The upstream
+  `.gitignore` contained `test_*.py`, which silently excluded every test
+  file from every commit — the 99 tests always passed locally but never
+  reached GitHub (only the empty `tests/__init__.py` did). The ignore
+  rule is removed and all six test modules are committed; CI's pylint
+  now covers them too.
+
 ## [1.7.1] - 2026-08-31
 
 ### Changed
