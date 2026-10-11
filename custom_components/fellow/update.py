@@ -5,6 +5,12 @@ Assistant update entity — visible in Settings → Updates and usable as a
 notification-automation trigger. It links to the release; installing the
 update still happens through HACS (or a manual copy), since an integration
 can't safely overwrite itself while running.
+
+When HACS is installed this entity is not created at all: HACS tracks the
+repository itself and shows an update entity with a working Install button,
+so the announce-only card would only duplicate it (and read as broken when
+tapped). Anyone running a manual copy alongside HACS can add this repo to
+HACS as a custom repository to get the installable card instead.
 """
 from __future__ import annotations
 
@@ -16,9 +22,11 @@ import aiohttp
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.start import async_at_started
 from homeassistant.loader import async_get_integration
 
 from . import StaggEKGDataUpdateCoordinator
@@ -48,14 +56,38 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the integration-update entity."""
+    """Set up the integration-update entity — on non-HACS installs only.
+
+    HACS may not have loaded yet while Home Assistant is still starting
+    (config entries set up in parallel), so the HACS check is deferred
+    until startup has finished; on a plain reload it runs immediately.
+    """
     coordinator: StaggEKGDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     integration = await async_get_integration(hass, DOMAIN)
+    version = integration.version
 
-    async_add_entities(
-        [StaggEKGIntegrationUpdate(coordinator, entry, integration.version)],
-        update_before_add=True,
-    )
+    @callback
+    def _add_unless_hacs(_hass: HomeAssistant) -> None:
+        if "hacs" in hass.config.components:
+            # Drop the entity a pre-HACS-aware version registered, so it
+            # doesn't linger as an orphan next to HACS's installable one.
+            registry = er.async_get(hass)
+            stale = registry.async_get_entity_id(
+                "update", DOMAIN, f"{entry.entry_id}_integration_update"
+            )
+            if stale:
+                registry.async_remove(stale)
+            _LOGGER.debug(
+                "HACS is installed; leaving release announcements to its "
+                "installable update entity"
+            )
+            return
+        async_add_entities(
+            [StaggEKGIntegrationUpdate(coordinator, entry, version)],
+            update_before_add=True,
+        )
+
+    entry.async_on_unload(async_at_started(hass, _add_unless_hacs))
 
 
 class StaggEKGIntegrationUpdate(UpdateEntity):

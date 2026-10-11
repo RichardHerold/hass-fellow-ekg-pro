@@ -18,12 +18,20 @@ preserved in this repository's git log.
 ## [1.7.3] - 2026-10-11
 
 ### Changed
+- **No duplicate update card on HACS installs.** When HACS is installed,
+  the integration no longer creates its own announce-only update entity
+  (one registered by an earlier version is removed automatically): HACS
+  tracks the repository itself and shows the one card with a working
+  Install button. On manual installs — where nothing else announces
+  releases — the entity remains. Automations triggering on
+  `update.*_integration_update` should retarget to HACS's update entity
+  for this repo.
 - **The Integration Update card now says how to install.** The entity
   announces new releases but cannot install them (an integration can't
   overwrite its own files while running), which read as "not
-  installable" when tapped. The update card and its release-notes
-  dialog now lead with: install via HACS (HACS → Fellow → Update),
-  then restart Home Assistant.
+  installable" when tapped. On manual installs, where the card still
+  exists, it and its release-notes dialog now lead with: install via
+  HACS (HACS → Fellow → Update), then restart Home Assistant.
 
 ## [1.7.2] - 2026-10-11
 

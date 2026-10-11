@@ -27,7 +27,7 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 | Hold Duration | Number (config) | How long keep-warm stays on before auto-off (1–120 min) |
 | Chime Volume | Number (config) | Kettle chime level, 0 = silent — automatable for quiet hours |
 | Sync Clock | Button (config) | Set the kettle's display clock to HA's local time (or enable daily auto-sync in options) |
-| Integration Update | Update | "Update available" when a new version is released on GitHub, with release notes |
+| Integration Update | Update | "Update available" when a new version is released on GitHub, with release notes (manual installs only — with HACS installed, HACS's own installable update entity takes its place) |
 | Current Temperature | Sensor | Real-time water temperature |
 | Target Temperature | Sensor | Target temperature setting |
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
@@ -130,7 +130,7 @@ automation:
           message: "Water is at temperature"
 ```
 
-**Update notifications** — the integration ships an update entity that checks this repo's GitHub releases twice a day; new versions appear in Settings → Updates with release notes (HACS shows its own update alongside it when installed that way). For a phone ping:
+**Update notifications** — on manual installs the integration ships an update entity that checks this repo's GitHub releases twice a day; new versions appear in Settings → Updates with release notes. When HACS is installed, this entity isn't created — HACS tracks the repo itself and shows the one update card that can actually install (trigger on HACS's `update.*` entity for this repo instead). For a phone ping on a manual install:
 ```yaml
 automation:
   - alias: "Kettle integration update available"
