@@ -81,6 +81,12 @@
       "invalid_presets": "Presets must be 'Name: temperature' pairs separated by commas, within 40-100 °C (104-212 °F), with unique names — e.g. 'Pour-over: 96, Green tea: 79'."
     }
   },
+  "issues": {
+    "kettle_unreachable": {
+      "title": "Kettle at {host} is not responding",
+      "description": "Home Assistant cannot connect to the kettle at {host} on port 80.\n\nIf the kettle still looks connected to WiFi (it answers `ping {host}` and shows in your router's client list) but `curl http://{host}/cli?cmd=state` hangs, the kettle firmware's web server has wedged — a known issue with the kettle's firmware, often after long or back-to-back heating sessions.\n\n**Fix: unplug the kettle's base for about 10 seconds and plug it back in.** Entities recover automatically within ~30 seconds; this issue then clears itself.\n\nIf the kettle isn't on WiFi at all, check its power and the Fellow app. While the kettle is unreachable, the integration polls more slowly to avoid stressing it, and keeps retrying indefinitely."
+    }
+  },
   "entity": {
     "select": {
       "display_unit": {

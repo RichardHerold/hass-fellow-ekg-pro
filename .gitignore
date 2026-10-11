@@ -41,8 +41,6 @@ ENV/
 master_bedroom_dashboard.yaml
 *.local
 
-# Test files
-test_*.py
 .gitignore
 COMMIT_READY.md
 GITHUB_SETUP.md

@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -40,6 +41,22 @@ MAX_CONSECUTIVE_TRANSIENT_FAILURES = 6
 # as "lifted" for at least this long, even if a brief docked reading
 # appears (the kettle can flap as it's set back down).
 LIFT_COOLDOWN_SECONDS = 90
+
+# While the kettle is unreachable, stretch the poll interval instead of
+# hammering it: the EKG's ESP32 HTTP server is known to wedge (device
+# answers ping, port 80 times out), and stacking connect attempts against
+# a struggling firmware can keep it pinned down. The first couple of
+# failures get no backoff (they're usually the benign off-transition
+# blip); after that the interval doubles per failure up to the cap.
+FAILURE_BACKOFF_GRACE = 2
+FAILURE_BACKOFF_CAP = timedelta(seconds=60)
+
+# After this long continuously unreachable, raise a Repairs issue that
+# names the known failure signature and the fix (power-cycle).
+UNREACHABLE_REPAIR_AFTER = timedelta(minutes=5)
+TROUBLESHOOTING_URL = (
+    "https://github.com/RichardHerold/hass-fellow-ekg-pro#troubleshooting"
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,7 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     mac = await hass.async_add_executor_job(client.get_mac)
 
     coordinator = StaggEKGDataUpdateCoordinator(
-        hass, client, poll_interval, active_poll_interval
+        hass, client, entry.entry_id, poll_interval, active_poll_interval
     )
     coordinator.device_info = DeviceInfo(
         identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
@@ -159,11 +176,13 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         self,
         hass: HomeAssistant,
         client: StaggEKGClient,
+        entry_id: str,
         poll_interval: int,
         active_poll_interval: int,
     ) -> None:
         """Initialize."""
         self.client = client
+        self.entry_id = entry_id
         self.device_info: DeviceInfo | None = None
         self.water_ready: bool = False
         self.minutes_to_ready: float | None = None
@@ -171,6 +190,9 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         self._idle_interval = timedelta(seconds=poll_interval)
         self._active_interval = timedelta(seconds=active_poll_interval)
         self._consecutive_transient_failures = 0
+        self._failure_streak = 0
+        self._unreachable_since = None
+        self._repair_created = False
         self._was_docked: bool | None = None
         self._lifted_at = None
 
@@ -195,6 +217,60 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             dt_util.utcnow() - self._lifted_at
         ).total_seconds() < LIFT_COOLDOWN_SECONDS
 
+    def _note_failure(self) -> None:
+        """Track an unreachable kettle: back off polling, raise a Repair.
+
+        Called on every failed poll. Backoff gives a half-wedged firmware
+        room to recover instead of pinning it down with connect attempts;
+        the Repairs issue turns a silent 'unavailable' into a guided fix
+        for the known ESP32 web-server wedge (ping answers, port 80 dead
+        → power-cycle the kettle).
+        """
+        self._failure_streak += 1
+        now = dt_util.utcnow()
+        if self._unreachable_since is None:
+            self._unreachable_since = now
+
+        factor = 2 ** min(max(self._failure_streak - FAILURE_BACKOFF_GRACE, 0), 3)
+        backoff = min(FAILURE_BACKOFF_CAP, self._idle_interval * factor)
+        # update_interval is set by the DataUpdateCoordinator base class;
+        # pylint can't see that and flags the read.
+        # pylint: disable-next=access-member-before-definition
+        current = self.update_interval
+        if current != backoff:
+            _LOGGER.debug(
+                "Kettle unreachable (failure %d); polling every %ss until it answers",
+                self._failure_streak,
+                backoff.total_seconds(),
+            )
+            self.update_interval = backoff
+
+        if (
+            not self._repair_created
+            and now - self._unreachable_since >= UNREACHABLE_REPAIR_AFTER
+        ):
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"kettle_unreachable_{self.entry_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="kettle_unreachable",
+                translation_placeholders={"host": self.client.host},
+                learn_more_url=TROUBLESHOOTING_URL,
+            )
+            self._repair_created = True
+
+    def _note_success(self) -> None:
+        """Clear the failure streak and any open unreachable Repair."""
+        self._failure_streak = 0
+        self._unreachable_since = None
+        if self._repair_created:
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"kettle_unreachable_{self.entry_id}"
+            )
+            self._repair_created = False
+
     async def _async_update_data(self):
         """Fetch data from API."""
         try:
@@ -206,6 +282,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             # time that happens — but give up after enough consecutive
             # failures so HA can mark the device unavailable if it really
             # is offline.
+            self._note_failure()
             self._consecutive_transient_failures += 1
             if (
                 self.data is not None
@@ -221,9 +298,11 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
                 return self.data
             raise UpdateFailed(f"Kettle unresponsive: {err}") from err
         except Exception as err:
+            self._note_failure()
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
         self._consecutive_transient_failures = 0
+        self._note_success()
 
         # Track docked → undocked transition for lift detection. Only a
         # response that actually carried a temperature field counts — a
