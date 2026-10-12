@@ -18,14 +18,12 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_PRESETS,
     CONF_SYNC_CLOCK,
-    CONF_SYNC_UNITS,
     CONF_TEMP_SET_METHOD,
     CONF_TEMPERATURE_UNIT,
     DEFAULT_ACTIVE_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_PRESETS,
     DEFAULT_SYNC_CLOCK,
-    DEFAULT_SYNC_UNITS,
     DOMAIN,
     MAX_ACTIVE_POLL_INTERVAL,
     MAX_POLL_INTERVAL,
@@ -264,30 +262,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            new_unit = user_input[CONF_TEMPERATURE_UNIT]
-            current_unit = self._current(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
-
             try:
                 parse_preset_list(
                     user_input.get(CONF_PRESETS, ""),
-                    fahrenheit=new_unit == UNIT_FAHRENHEIT,
+                    fahrenheit=user_input[CONF_TEMPERATURE_UNIT] == UNIT_FAHRENHEIT,
                 )
             except ValueError:
                 errors["base"] = "invalid_presets"
 
             if not errors:
-                # Only touch the physical kettle's display when the user
-                # opted into unit syncing and actually changed the unit.
-                if user_input.get(CONF_SYNC_UNITS) and new_unit != current_unit:
-                    client = StaggEKGClient(host=self.config_entry.data[CONF_HOST])
-                    try:
-                        if new_unit == UNIT_CELSIUS:
-                            await self.hass.async_add_executor_job(client.set_units_celsius)
-                        else:
-                            await self.hass.async_add_executor_job(client.set_units_fahrenheit)
-                    except Exception as err:
-                        _LOGGER.error("Failed to update kettle units: %s", err)
-
                 return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
@@ -320,10 +303,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             min=MIN_ACTIVE_POLL_INTERVAL, max=MAX_ACTIVE_POLL_INTERVAL
                         ),
                     ),
-                    vol.Required(
-                        CONF_SYNC_UNITS,
-                        default=self._current(CONF_SYNC_UNITS, DEFAULT_SYNC_UNITS),
-                    ): bool,
                     vol.Optional(
                         CONF_PRESETS,
                         default=self._current(CONF_PRESETS, DEFAULT_PRESETS),

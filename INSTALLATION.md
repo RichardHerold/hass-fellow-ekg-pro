@@ -52,9 +52,10 @@ The integration allows you to choose between Celsius and Fahrenheit:
 - **Celsius (units=1)**: displayed in °C
 - **Fahrenheit (units=0)**: displayed in °F
 
-By default this only affects Home Assistant. Enable **Sync unit to the
-kettle's display** in the options if you also want the kettle's physical
-LCD to follow.
+This only affects Home Assistant — the unit used for this kettle's
+entities, presets and actions. The unit on the kettle's own display is a
+separate setting: change it with the **Kettle Display Unit** control on the
+kettle's device page (it also reflects changes made on the kettle itself).
 
 You can change the unit later:
 1. Go to Settings → Devices & Services

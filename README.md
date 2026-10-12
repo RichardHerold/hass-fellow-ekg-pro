@@ -81,10 +81,9 @@ Setup only succeeds when the kettle both **answers and is understood**: validati
 
 ### Options (Settings → Devices & Services → Fellow → Configure)
 
-- **Temperature unit** — the unit Home Assistant uses
+- **Temperature unit** — the unit Home Assistant uses for this kettle's entities, presets and actions. The kettle's own screen is set separately, with the **Kettle Display Unit** control on the device page.
 - **Temperature-setting method** — *Direct* (firmware set-target commands with verification; recommended) or *Dial emulation* (slower; for firmwares where the set commands don't work)
 - **Poll intervals** — idle (default 10s) and active-while-heating (default 3s), both configurable
-- **Sync unit to the kettle's display** — off by default; when on, changing the unit here also switches the kettle's own display
 
 ## Usage
 

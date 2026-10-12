@@ -15,6 +15,23 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.7.4] - 2026-10-12
+
+### Removed
+- **The "Sync unit to the kettle's display" option.** Despite its name it
+  never kept anything in sync: it acted once, only when the unit was
+  changed in Options with the box ticked. The **Kettle Display Unit**
+  control on the device page (added in 1.7.0) does the job directly, any
+  time, and also reflects changes made on the kettle itself. The Options
+  unit is unchanged — it sets the unit Home Assistant uses for this
+  kettle's entities, presets and actions — and its description now points
+  to Kettle Display Unit for the kettle's own screen. Existing setups need
+  no action.
+
+### Fixed
+- The Options form's active-poll description no longer mentions the Water
+  Ready sensor, which Kettle State replaced in 1.6.0.
+
 ## [1.7.3] - 2026-10-11
 
 ### Changed

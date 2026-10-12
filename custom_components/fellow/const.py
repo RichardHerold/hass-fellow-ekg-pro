@@ -9,7 +9,6 @@ GITHUB_REPO = "RichardHerold/hass-fellow-ekg-pro"
 CONF_TEMPERATURE_UNIT = "temperature_unit"
 CONF_TEMP_SET_METHOD = "temp_set_method"
 CONF_POLL_INTERVAL = "poll_interval"
-CONF_SYNC_UNITS = "sync_kettle_units"
 
 # Temperature units (matches kettle's internal values)
 UNIT_CELSIUS = "celsius"
@@ -31,8 +30,6 @@ MAX_POLL_INTERVAL = 60
 DEFAULT_ACTIVE_POLL_INTERVAL = 3  # seconds, while heating/holding
 MIN_ACTIVE_POLL_INTERVAL = 2
 MAX_ACTIVE_POLL_INTERVAL = 60
-
-DEFAULT_SYNC_UNITS = False
 
 # User-defined temperature presets ("Name: temp" pairs, see presets.py)
 CONF_PRESETS = "presets"
