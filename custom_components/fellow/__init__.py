@@ -320,15 +320,21 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         steps naming the right slot when older firmware is still on the
         kettle. Anything else is left to the generic unreachable card.
         """
-        self._firmware_checked = True
         firmware = await self.hass.async_add_executor_job(
             self.client.get_firmware_status
         )
-        if firmware is None or not firmware.cli_muted:
+        if firmware is None:
+            # Not settled yet: muted firmware never produces the successful
+            # poll that would reset the check, so retry on the next muted
+            # reply rather than leave the generic card as the diagnosis.
+            _LOGGER.debug("Kettle version page unavailable; will check again")
+            return
+        self._firmware_checked = True
+        if not firmware.cli_muted:
             _LOGGER.debug(
-                "Kettle replies carry no output, but its version page doesn't "
-                "show CLI-muting firmware (%s)",
-                firmware.current_version if firmware else "page unavailable",
+                "Kettle replies carry no output, but its version page shows "
+                "firmware %s, which isn't known to mute them",
+                firmware.current_version,
             )
             return
 
