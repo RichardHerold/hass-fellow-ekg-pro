@@ -286,3 +286,153 @@ class TestHelperParsers:
         assert settings["hold"] == "15"
         assert settings["guide"] == "1"
         assert settings["chime"] == "5"
+
+
+# A /cli reply from firmware 1.2.26, verbatim from a real kettle: the
+# command form and nothing else, whatever the command.
+FORM_ONLY_REPLY = """
+            <form action="cli" method="GET">
+            <label for="x">CLI Command:</label><br>
+            <input type="text" id="cli" name="cmd"><br>
+            </form>
+            """
+
+# The version page (GET /) of that same kettle, verbatim.
+VERSION_PAGE_1226 = (
+    "<h1>EKG</h1>Current version: 1.2.26 CLI<br>\n"
+    "Build time: 17:50:37<br>\n"
+    "Build date: Oct  8 2026<br>\n"
+    "Boot partition: ota_1<br>\n"
+    "Running partition: ota_1<br>\n"
+    "Last invalid partition: <br>\n"
+    "partition 'factory' at 0x10000 size 0x200000 encr 0 state ?? "
+    "fw version 1.1.14SSB<br>\n"
+    "partition 'ota_0' at 0x210000 size 0x200000 encr 0 state valid "
+    "fw version 1.1.76SSP<br>\n"
+    "partition 'ota_1' at 0x410000 size 0x200000 encr 0 state valid "
+    "fw version 1.2.26<br>\n"
+)
+
+
+def version_page(current, running, slots, boot=None, states=("valid", "valid")):
+    """A version page with the given running firmware and (ota_0, ota_1) contents."""
+    ota_0, ota_1 = slots
+    return (
+        f"<h1>EKG</h1>Current version: {current} CLI<br>\n"
+        f"Boot partition: {boot or running}<br>\n"
+        f"Running partition: {running}<br>\n"
+        "Last invalid partition: <br>\n"
+        "partition 'factory' at 0x10000 size 0x200000 encr 0 state ?? "
+        "fw version 1.1.14SSB<br>\n"
+        f"partition 'ota_0' at 0x210000 size 0x200000 encr 0 state {states[0]} "
+        f"fw version {ota_0}<br>\n"
+        f"partition 'ota_1' at 0x410000 size 0x200000 encr 0 state {states[1]} "
+        f"fw version {ota_1}<br>\n"
+    )
+
+
+class TestMutedCli:
+    """Firmware 1.2.24+ answers every command with just the command form."""
+
+    def test_form_only_reply_is_detected(self):
+        assert parser.cli_output_missing(FORM_ONLY_REPLY)
+
+    def test_form_with_output_is_not_muted(self):
+        assert not parser.cli_output_missing(FORM_ONLY_REPLY + EKG_PRO_HEATING_F)
+
+    def test_plain_text_reply_is_not_muted(self):
+        assert not parser.cli_output_missing(EKG_PRO_HEATING_F)
+
+    def test_empty_reply_is_not_classed_as_muted(self):
+        assert not parser.cli_output_missing("")
+
+    def test_parse_state_raises_muted_error(self):
+        with pytest.raises(parser.KettleCliMutedError):
+            parse_state(FORM_ONLY_REPLY)
+
+    def test_muted_error_is_transient(self):
+        # The coordinator rides out transient errors (a one-off odd reply
+        # during a mode change) before marking the kettle unavailable.
+        assert issubclass(parser.KettleCliMutedError, parser.KettleTransientError)
+        assert issubclass(parser.KettleCliMutedError, KettleResponseError)
+
+    def test_reply_with_form_and_output_parses(self):
+        state = parse_state(FORM_ONLY_REPLY + EKG_PRO_HEATING_F)
+        assert state.mode == "S_Heat"
+        assert state.current_temp_c == pytest.approx(85.0, abs=0.01)
+
+
+class TestVersionPage:
+    def test_real_1226_page(self):
+        status = parser.parse_root_page(VERSION_PAGE_1226)
+        assert status.current_version == "1.2.26"
+        assert status.running == "ota_1"
+        assert status.boot == "ota_1"
+        assert {name: (s.state, s.version) for name, s in status.slots.items()} == {
+            "factory": ("??", "1.1.14SSB"),
+            "ota_0": ("valid", "1.1.76SSP"),
+            "ota_1": ("valid", "1.2.26"),
+        }
+
+    def test_1226_is_muted_with_rollback_to_ota_0(self):
+        status = parser.parse_root_page(VERSION_PAGE_1226)
+        assert status.cli_muted
+        spare = status.rollback_slot()
+        assert (spare.name, spare.version) == ("ota_0", "1.1.76SSP")
+
+    def test_1224_layout_rolls_back_to_ota_1(self):
+        # As reported in stagg-ekg-plus-ha issue #5: 1.2.24 running on ota_0.
+        status = parser.parse_root_page(
+            version_page("1.2.24", "ota_0", ("1.2.24", "1.1.76SSP"))
+        )
+        assert status.cli_muted
+        assert status.rollback_slot().name == "ota_1"
+
+    def test_after_switching_back(self):
+        status = parser.parse_root_page(
+            version_page("1.1.76SSP", "ota_0", ("1.1.76SSP", "1.2.26"))
+        )
+        assert not status.cli_muted
+        assert status.rollback_slot() is None  # the spare holds newer firmware
+
+    def test_no_rollback_when_both_slots_are_muted(self):
+        status = parser.parse_root_page(version_page("1.2.26", "ota_1", ("1.2.24", "1.2.26")))
+        assert status.cli_muted
+        assert status.rollback_slot() is None
+
+    def test_invalid_spare_slot_is_not_offered(self):
+        status = parser.parse_root_page(
+            version_page("1.2.26", "ota_1", ("1.1.76SSP", "1.2.26"), states=("invalid", "valid"))
+        )
+        assert status.rollback_slot() is None
+
+    def test_undef_spare_slot_is_offered(self):
+        status = parser.parse_root_page(
+            version_page("1.2.26", "ota_1", ("1.1.76SSP", "1.2.26"), states=("undef", "valid"))
+        )
+        assert status.rollback_slot().name == "ota_0"
+
+    def test_factory_slot_is_never_offered(self):
+        status = parser.parse_root_page(version_page("1.2.26", "ota_1", ("1.2.24", "1.2.26")))
+        assert status.rollback_slot() is None  # factory holds 1.1.14SSB
+
+    def test_pending_boot_partition(self):
+        status = parser.parse_root_page(
+            version_page("1.2.26", "ota_1", ("1.1.76SSP", "1.2.26"), boot="ota_0")
+        )
+        assert (status.boot, status.running) == ("ota_0", "ota_1")
+
+    def test_empty_boot_field_does_not_swallow_next_line(self):
+        page = VERSION_PAGE_1226.replace("Boot partition: ota_1", "Boot partition: ")
+        assert parser.parse_root_page(page).boot is None
+
+    def test_cli_form_is_not_a_version_page(self):
+        assert parser.parse_root_page(FORM_ONLY_REPLY) is None
+        assert parser.parse_root_page("") is None
+
+    @pytest.mark.parametrize(
+        "older, newer",
+        [("1.1.76SSP", "1.2.24"), ("1.2.24", "1.2.26"), ("1.1.14SSB", "1.1.76SSP")],
+    )
+    def test_version_ordering(self, older, newer):
+        assert parser.version_key(older) < parser.version_key(newer)

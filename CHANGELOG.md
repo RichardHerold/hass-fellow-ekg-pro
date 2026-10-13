@@ -15,6 +15,40 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.8.0] - 2026-10-13
+
+Firmware-update release. In October 2026 Fellow began pushing firmware
+1.2.24 and 1.2.26 to kettles automatically. Both mute the local command
+interface this integration uses, which looks like an outage that
+power-cycling can't fix.
+
+### Added
+- **Repairs card for firmware that mutes local control.** When the kettle
+  answers every command with only its command form, the integration reads
+  the kettle's version page. If it's running 1.2.24 or later, it raises an
+  error in Settings → Repairs naming the firmware. If the kettle still
+  holds older firmware in its spare slot, the card lists the switch-back
+  steps with your slot name; otherwise it points to the alternatives. The
+  same summary goes to the log, and the card clears itself once the kettle
+  answers again. This also works while setup keeps retrying after a
+  restart, which previously never raised a card.
+- **Version page reading** (`GET /`): the device's firmware version falls
+  back to the version page when `fwinfo` returns nothing, and diagnostics
+  include the version page with its parsed slot table.
+- **README: "Kettle firmware update stopped local control"**: how to check
+  the firmware, block the kettle's internet access (with UniFi steps),
+  switch back, and keep it from updating again.
+
+### Fixed
+- **The Identify button now beeps.** It uses `buz 400 1000 200`, a pattern
+  the stagg-ekg-plus-ha project confirmed is audible; the previous pattern
+  was never confirmed and stayed silent in a field test.
+
+### Credits
+- The firmware diagnosis, switch-back procedure and beep pattern come from
+  [stagg-ekg-plus-ha](https://github.com/bramboe/stagg-ekg-plus-ha)
+  (see its issue #5).
+
 ## [1.7.4] - 2026-10-12
 
 ### Removed

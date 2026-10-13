@@ -24,12 +24,15 @@ from typing import Optional
 # KettleResponseError is re-exported for callers even though this module
 # doesn't raise it directly.
 from .parser import (  # noqa: F401  # pylint: disable=unused-import
+    FirmwareStatus,
+    KettleCliMutedError,
     KettleCommandError,
     KettleResponseError,
     KettleTimeoutError,
     KettleTransientError,
     ParsedState,
     parse_fwinfo,
+    parse_root_page,
     parse_settings,
     parse_state,
     parse_wifiprt_mac,
@@ -71,10 +74,11 @@ CMD_UNITS_F = "setunitsf"
 CMD_DIAL_LEFT = "left"
 CMD_DIAL_RIGHT = "right"
 CMD_PRESS_DIAL = "2"
-# Short buzzer chirp for the Identify button. Frequency/duty taken from the
-# documented working example (buz 1000 4000 500); fixed values only so
-# nothing can drive the buzzer PWM out of spec.
-CMD_IDENTIFY = "buz 1000 4000 200"
+# Short buzzer chirp for the Identify button: the pattern the
+# stagg-ekg-plus-ha project uses as its alert beep, confirmed audible (the
+# earlier "buz 1000 4000 200" stayed silent in a field test). Fixed values
+# only, so nothing can drive the buzzer PWM out of spec.
+CMD_IDENTIFY = "buz 400 1000 200"
 # Direct heater-element GPIO, bypassing the firmware state machine.
 CMD_HEATER_GPIO_ON = "heaton"
 CMD_HEATER_GPIO_OFF = "heatoff"
@@ -168,6 +172,24 @@ class StaggEKGClient:
         except Exception as err:
             _LOGGER.debug("fwinfo unavailable: %s", err)
             return {}
+
+    def get_root_page(self) -> str:
+        """The kettle's version page (``GET /``) as raw text."""
+        response = self.session.get(f"{self.base_url}/", timeout=5.0)
+        response.raise_for_status()
+        return response.text
+
+    def get_firmware_status(self) -> Optional[FirmwareStatus]:
+        """Best-effort parsed version page. Never raises.
+
+        The one source of the running firmware version and each slot's
+        contents that still works when the firmware mutes /cli output.
+        """
+        try:
+            return parse_root_page(self.get_root_page())
+        except requests.exceptions.RequestException as err:
+            _LOGGER.debug("Version page unavailable: %s", err)
+            return None
 
     def get_mac(self) -> Optional[str]:
         """Best-effort MAC address from wifiprt. Never raises."""
