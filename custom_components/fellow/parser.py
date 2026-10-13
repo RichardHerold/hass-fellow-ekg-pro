@@ -43,6 +43,15 @@ class KettleResponseError(KettleTransientError):
     """Raised when the kettle's response can't be parsed (missing fields)."""
 
 
+class KettleCliMutedError(KettleResponseError):
+    """The kettle answered with its command form but no command output.
+
+    Firmware 1.2.24 and later answer every ``/cli`` request this way: the
+    command may still run, but its output never reaches HTTP. A one-off
+    occurrence is treated like any other transient failure.
+    """
+
+
 class KettleCommandError(Exception):
     """A command could not be delivered for a non-transient reason."""
 
@@ -191,13 +200,28 @@ class ParsedState:
         return self.temp_field_present and self.current_temp_c is not None
 
 
+# Every /cli reply carries this input form; real command output follows it.
+_CLI_FORM_RE = re.compile(r"<form\b.*?</form>", re.IGNORECASE | re.DOTALL)
+
+
+def cli_output_missing(text: str) -> bool:
+    """True when a /cli reply is only the command form, with no output."""
+    if not text or "CLI Command" not in text:
+        return False
+    return not _CLI_FORM_RE.sub("", text).strip()
+
+
 def parse_state(text: str) -> ParsedState:
     """Parse a ``state`` response.
 
     Raises KettleResponseError when the response has no ``mode=`` field —
     there is no safe default for mode, and a truncated response should be
     treated like a transient failure. Every other field degrades to None.
+    A reply that is only the command form raises KettleCliMutedError.
     """
+    if cli_output_missing(text):
+        raise KettleCliMutedError("Kettle replied with its command form but no output")
+
     mode_match = MODE_RE.search(text)
     if not mode_match:
         raise KettleResponseError(f"Kettle response missing 'mode' field: {text!r}")
@@ -349,3 +373,89 @@ def parse_settings(text: str) -> dict:
     others; both are accepted.
     """
     return dict(SETTING_LINE_RE.findall(text))
+
+
+# First firmware known to stop returning /cli output (Fellow's automatic
+# update of October 2026); 1.2.26 behaves the same.
+CLI_MUTED_SINCE = (1, 2, 24)
+
+# Version page fields. Values are matched within their own line so an empty
+# field (e.g. "Last invalid partition:") can't swallow the next line.
+_ROOT_CURRENT_RE = re.compile(r"Current version:[ \t]*([^\s<]+)")
+_ROOT_RUNNING_RE = re.compile(r"Running partition:[ \t]*(\w+)")
+_ROOT_BOOT_RE = re.compile(r"Boot partition:[ \t]*(\w+)")
+_ROOT_SLOT_RE = re.compile(
+    r"partition[ \t]+'(\w+)'[^\n]*?\bstate[ \t]+(\S+)[ \t]+fw version[ \t]+([^\s<]+)"
+)
+
+
+def version_key(version: Optional[str]) -> tuple:
+    """Comparable key for firmware versions like ``1.1.76SSP`` or ``1.2.26``."""
+    return tuple(int(part) for part in re.findall(r"\d+", version or ""))
+
+
+@dataclass
+class FirmwareSlot:
+    """One firmware partition as listed on the kettle's version page."""
+
+    name: str
+    state: str
+    version: str
+
+
+@dataclass
+class FirmwareStatus:
+    """The kettle's version page: running firmware and each slot's contents."""
+
+    current_version: str
+    running: str
+    boot: Optional[str] = None
+    slots: dict = field(default_factory=dict)
+
+    @property
+    def cli_muted(self) -> bool:
+        """Whether the running firmware is one that silences /cli output."""
+        return version_key(self.current_version) >= CLI_MUTED_SINCE
+
+    def rollback_slot(self) -> Optional[FirmwareSlot]:
+        """The other OTA slot, if it holds older firmware the kettle can boot.
+
+        Only firmware from before CLI_MUTED_SINCE counts — switching to
+        another muted version wouldn't help. A slot listed as ``undef`` is
+        still bootable (intact images show that after switching back and
+        forth); ``invalid`` and ``aborted`` are not.
+        """
+        for slot in self.slots.values():
+            key = version_key(slot.version)
+            if (
+                slot.name.startswith("ota_")
+                and slot.name != self.running
+                and slot.state not in ("invalid", "aborted")
+                and key
+                and key < CLI_MUTED_SINCE
+            ):
+                return slot
+        return None
+
+
+def parse_root_page(text: str) -> Optional[FirmwareStatus]:
+    """Parse the kettle's version page (``GET /``); None if it isn't one.
+
+    Unlike /cli, this page still answers on firmware that mutes CLI output.
+    """
+    page = re.sub(r"<br\s*/?>", "\n", text or "", flags=re.IGNORECASE)
+    current = _ROOT_CURRENT_RE.search(page)
+    running = _ROOT_RUNNING_RE.search(page)
+    if not current or not running:
+        return None
+    boot = _ROOT_BOOT_RE.search(page)
+    slots = {
+        match.group(1): FirmwareSlot(match.group(1), match.group(2), match.group(3))
+        for match in _ROOT_SLOT_RE.finditer(page)
+    }
+    return FirmwareStatus(
+        current_version=current.group(1),
+        running=running.group(1),
+        boot=boot.group(1) if boot else None,
+        slots=slots,
+    )

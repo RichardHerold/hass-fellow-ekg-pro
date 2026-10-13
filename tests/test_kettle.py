@@ -55,7 +55,7 @@ def test_identify_sends_fixed_safe_chirp(monkeypatch):
         client, "_send_command", lambda cmd, **kw: sent.append(cmd) or "ok"
     )
     client.identify()
-    assert sent == ["buz 1000 4000 200"]
+    assert sent == ["buz 400 1000 200"]
 
 
 def test_direct_target_command_format():
@@ -127,3 +127,44 @@ class TestCommandFirstControl:
         monkeypatch.setattr(client, "_send_command", fake_send)
         assert client.stop_heating() == "stopped"
         assert client.sent == []
+
+
+class _FakeResponse:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+class TestFirmwareStatus:
+    """The version page (GET /) still answers when /cli output is muted."""
+
+    PAGE = (
+        "<h1>EKG</h1>Current version: 1.2.26 CLI<br>"
+        "Boot partition: ota_1<br>Running partition: ota_1<br>"
+        "partition 'ota_0' at 0x210000 size 0x200000 encr 0 state valid "
+        "fw version 1.1.76SSP<br>"
+        "partition 'ota_1' at 0x410000 size 0x200000 encr 0 state valid "
+        "fw version 1.2.26<br>"
+    )
+
+    def test_reads_the_root_page(self, client, monkeypatch):
+        requested = []
+
+        def fake_get(url, timeout):
+            requested.append(url)
+            return _FakeResponse(self.PAGE)
+
+        monkeypatch.setattr(client.session, "get", fake_get)
+        status = client.get_firmware_status()
+        assert requested == ["http://192.0.2.1:80/"]
+        assert status.current_version == "1.2.26"
+        assert status.rollback_slot().name == "ota_0"
+
+    def test_unreachable_kettle_returns_none(self, client, monkeypatch):
+        def fail(url, timeout):
+            raise kettle.requests.exceptions.ConnectTimeout("no route")
+
+        monkeypatch.setattr(client.session, "get", fail)
+        assert client.get_firmware_status() is None

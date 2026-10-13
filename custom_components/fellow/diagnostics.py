@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from . import StaggEKGDataUpdateCoordinator
 from .const import DOMAIN
 from .kettle import CMD_FWINFO, CMD_PRTSETTINGS, CMD_STATE, CMD_WIFIPRT
+from .parser import parse_root_page
 
 TO_REDACT = {CONF_HOST}
 
@@ -41,6 +42,16 @@ async def async_get_config_entry_diagnostics(
         except Exception as err:  # pylint: disable=broad-except
             raw_responses[cmd] = f"<error: {err}>"
 
+    # The version page still answers when the firmware mutes /cli output.
+    firmware_status: dict[str, Any] | None = None
+    try:
+        root_page = await hass.async_add_executor_job(coordinator.client.get_root_page)
+        parsed = parse_root_page(root_page)
+        firmware_status = asdict(parsed) if parsed else None
+    except Exception as err:  # pylint: disable=broad-except
+        root_page = f"<error: {err}>"
+    raw_responses["version_page"] = root_page
+
     return {
         "note": "raw_responses come straight from the kettle firmware and "
         "may include network details (IP, SSID, MAC); review before sharing.",
@@ -50,5 +61,6 @@ async def async_get_config_entry_diagnostics(
             "unique_id": entry.unique_id,
         },
         "last_parsed_state": last_state,
+        "firmware_status": firmware_status,
         "raw_responses": raw_responses,
     }

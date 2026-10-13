@@ -8,6 +8,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
@@ -27,7 +28,7 @@ from .const import (
     TEMP_METHOD_DIRECT,
 )
 from .eta import HeatingRateEstimator
-from .kettle import KettleTransientError, StaggEKGClient
+from .kettle import KettleCliMutedError, KettleTransientError, StaggEKGClient
 from .parser import is_water_ready
 
 # After this many consecutive transient failures, give up holding the
@@ -56,6 +57,16 @@ FAILURE_BACKOFF_CAP = timedelta(seconds=60)
 UNREACHABLE_REPAIR_AFTER = timedelta(minutes=5)
 TROUBLESHOOTING_URL = (
     "https://github.com/RichardHerold/hass-fellow-ekg-pro#troubleshooting"
+)
+
+# Firmware 1.2.24+ answers every command with just the command form. A few
+# such replies in a row prompt a look at the kettle's version page, which
+# decides whether to raise the firmware Repairs card — a single odd reply
+# never does.
+MUTED_REPLIES_BEFORE_FIRMWARE_CHECK = 3
+FIRMWARE_HELP_URL = (
+    "https://github.com/RichardHerold/hass-fellow-ekg-pro"
+    "#kettle-firmware-update-stopped-local-control"
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Best-effort device metadata; must never block or fail setup.
     fw_info = await hass.async_add_executor_job(client.get_firmware_info)
+    firmware = await hass.async_add_executor_job(client.get_firmware_status)
     mac = await hass.async_add_executor_job(client.get_mac)
 
     coordinator = StaggEKGDataUpdateCoordinator(
@@ -101,12 +113,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name=entry.title or "Fellow Kettle",
         manufacturer="Fellow",
         model=fw_info.get("project") or "Stagg EKG (WiFi)",
-        sw_version=fw_info.get("version"),
+        sw_version=fw_info.get("version")
+        or (firmware.current_version if firmware else None),
         configuration_url=f"http://{host}",
     )
 
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady:
+        # On firmware that mutes the CLI, setup retries forever, each time
+        # with a fresh coordinator that would never see enough failed polls
+        # to raise the Repairs card — so raise it from here.
+        if isinstance(coordinator.last_failure, KettleCliMutedError):
+            await coordinator.async_report_muted_firmware()
+        raise
 
     # Positive confirmation in the log that the kettle was reached AND
     # understood — the counterpart of the config flow's strict validation.
@@ -193,6 +213,14 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         self._failure_streak = 0
         self._unreachable_since = None
         self._repair_created = False
+        self.last_failure: Exception | None = None
+        self._muted_replies = 0
+        self._firmware_checked = False
+        self._firmware_reported = False
+        # A firmware card from an earlier setup attempt may still be open
+        # (setup retries build a fresh coordinator); the first success
+        # clears it.
+        self._firmware_issue_may_exist = True
         self._was_docked: bool | None = None
         self._lifted_at = None
 
@@ -217,7 +245,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             dt_util.utcnow() - self._lifted_at
         ).total_seconds() < LIFT_COOLDOWN_SECONDS
 
-    def _note_failure(self) -> None:
+    def _note_failure(self, err: Exception) -> None:
         """Track an unreachable kettle: back off polling, raise a Repair.
 
         Called on every failed poll. Backoff gives a half-wedged firmware
@@ -226,6 +254,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
         for the known ESP32 web-server wedge (ping answers, port 80 dead
         → power-cycle the kettle).
         """
+        self.last_failure = err
         self._failure_streak += 1
         now = dt_util.utcnow()
         if self._unreachable_since is None:
@@ -247,6 +276,7 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
 
         if (
             not self._repair_created
+            and not self._firmware_reported
             and now - self._unreachable_since >= UNREACHABLE_REPAIR_AFTER
         ):
             ir.async_create_issue(
@@ -262,14 +292,94 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             self._repair_created = True
 
     def _note_success(self) -> None:
-        """Clear the failure streak and any open unreachable Repair."""
+        """Clear the failure streak and any open Repairs issue."""
         self._failure_streak = 0
         self._unreachable_since = None
+        self.last_failure = None
+        self._muted_replies = 0
+        self._firmware_checked = False
+        self._firmware_reported = False
         if self._repair_created:
             ir.async_delete_issue(
                 self.hass, DOMAIN, f"kettle_unreachable_{self.entry_id}"
             )
             self._repair_created = False
+        if self._firmware_issue_may_exist:
+            ir.async_delete_issue(self.hass, DOMAIN, self._firmware_issue_id)
+            self._firmware_issue_may_exist = False
+
+    @property
+    def _firmware_issue_id(self) -> str:
+        return f"firmware_cli_muted_{self.entry_id}"
+
+    async def async_report_muted_firmware(self) -> None:
+        """Raise the firmware Repairs card if the version page confirms it.
+
+        Called once muted replies persist. The version page decides: only
+        firmware known to mute the CLI gets the card — with switch-back
+        steps naming the right slot when older firmware is still on the
+        kettle. Anything else is left to the generic unreachable card.
+        """
+        firmware = await self.hass.async_add_executor_job(
+            self.client.get_firmware_status
+        )
+        if firmware is None:
+            # Not settled yet: muted firmware never produces the successful
+            # poll that would reset the check, so retry on the next muted
+            # reply rather than leave the generic card as the diagnosis.
+            _LOGGER.debug("Kettle version page unavailable; will check again")
+            return
+        self._firmware_checked = True
+        if not firmware.cli_muted:
+            _LOGGER.debug(
+                "Kettle replies carry no output, but its version page shows "
+                "firmware %s, which isn't known to mute them",
+                firmware.current_version,
+            )
+            return
+
+        spare = firmware.rollback_slot()
+        placeholders = {"host": self.client.host, "version": firmware.current_version}
+        if spare is not None:
+            translation_key = "firmware_cli_muted"
+            placeholders["spare_slot"] = spare.name
+            placeholders["spare_version"] = spare.version
+        else:
+            translation_key = "firmware_cli_muted_no_rollback"
+
+        already_open = (
+            ir.async_get(self.hass).async_get_issue(DOMAIN, self._firmware_issue_id)
+            is not None
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._firmware_issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=translation_key,
+            translation_placeholders=placeholders,
+            learn_more_url=FIRMWARE_HELP_URL,
+        )
+        self._firmware_reported = True
+        self._firmware_issue_may_exist = True
+        if self._repair_created:
+            ir.async_delete_issue(
+                self.hass, DOMAIN, f"kettle_unreachable_{self.entry_id}"
+            )
+            self._repair_created = False
+
+        if not already_open:
+            _LOGGER.warning(
+                "Kettle at %s is running firmware %s, which no longer returns "
+                "output from its local command interface, so Home Assistant "
+                "can't read or control it. %s See Settings → Repairs.",
+                self.client.host,
+                firmware.current_version,
+                f"Its spare slot {spare.name} still holds {spare.version}."
+                if spare
+                else "No older firmware was found in its spare slot.",
+            )
 
     async def _async_update_data(self):
         """Fetch data from API."""
@@ -282,7 +392,16 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
             # time that happens — but give up after enough consecutive
             # failures so HA can mark the device unavailable if it really
             # is offline.
-            self._note_failure()
+            self._note_failure(err)
+            if isinstance(err, KettleCliMutedError):
+                self._muted_replies += 1
+                if (
+                    self._muted_replies >= MUTED_REPLIES_BEFORE_FIRMWARE_CHECK
+                    and not self._firmware_checked
+                ):
+                    await self.async_report_muted_firmware()
+            else:
+                self._muted_replies = 0
             self._consecutive_transient_failures += 1
             if (
                 self.data is not None
@@ -298,7 +417,8 @@ class StaggEKGDataUpdateCoordinator(DataUpdateCoordinator):
                 return self.data
             raise UpdateFailed(f"Kettle unresponsive: {err}") from err
         except Exception as err:
-            self._note_failure()
+            self._note_failure(err)
+            self._muted_replies = 0
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
         self._consecutive_transient_failures = 0

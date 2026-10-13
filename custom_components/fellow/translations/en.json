@@ -83,6 +83,14 @@
     "kettle_unreachable": {
       "title": "Kettle at {host} is not responding",
       "description": "Home Assistant cannot connect to the kettle at {host} on port 80.\n\nIf the kettle still looks connected to WiFi (it answers `ping {host}` and shows in your router's client list) but `curl http://{host}/cli?cmd=state` hangs, the kettle firmware's web server has wedged — a known issue with the kettle's firmware, often after long or back-to-back heating sessions.\n\n**Fix: unplug the kettle's base for about 10 seconds and plug it back in.** Entities recover automatically within ~30 seconds; this issue then clears itself.\n\nIf the kettle isn't on WiFi at all, check its power and the Fellow app. While the kettle is unreachable, the integration polls more slowly to avoid stressing it, and keeps retrying indefinitely."
+    },
+    "firmware_cli_muted": {
+      "title": "Kettle firmware {version} stopped local control",
+      "description": "The kettle at {host} updated itself to firmware {version}. This firmware no longer returns any output from the local command interface this integration uses, so Home Assistant can't read or control the kettle. Unplugging it doesn't help.\n\nThe kettle still has firmware {spare_version} in its spare slot ({spare_slot}), so you can switch back:\n\n1. **Block the kettle's internet access first** with a router rule that keeps local access. Otherwise it reinstalls the update within about 30 minutes.\n2. Open `http://{host}/cli?cmd=setpart+{spare_slot}` in a browser.\n3. Open `http://{host}/` and check that it shows `Boot partition: {spare_slot}`. If it doesn't, stop here.\n4. Open `http://{host}/cli?cmd=reset`. The page won't load while the kettle restarts; that's expected.\n5. After about 30 seconds, `http://{host}/` should show `Current version: {spare_version}`. Reload this integration, then turn on **Keep the kettle's clock synced** in its options, since the kettle can no longer get the time from the internet.\n\nKeep the internet block on permanently. Never send `eraseotherpart`: it erases the spare slot, and with it the way back. This issue clears itself once the kettle answers again."
+    },
+    "firmware_cli_muted_no_rollback": {
+      "title": "Kettle firmware {version} stopped local control",
+      "description": "The kettle at {host} is running firmware {version}, which no longer returns any output from the local command interface this integration uses, so Home Assistant can't read or control the kettle. Unplugging it doesn't help.\n\nNo older firmware was found in the kettle's spare slot, so it can't be switched back the usual way. Block the kettle's internet access to stop further updates, and see the linked instructions for other options, including a Bluetooth-based integration that supports this firmware. This issue clears itself once the kettle answers again."
     }
   },
   "entity": {

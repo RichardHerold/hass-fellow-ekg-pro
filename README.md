@@ -7,6 +7,8 @@ A Home Assistant custom integration for Fellow Stagg EKG WiFi kettles (Stagg EKG
 
 It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`). The command set and response parsing cover both the Stagg EKG+ (firmware 1.1.76SSP) and the Stagg EKG Pro, whose firmware formats responses differently and uses a different set-temperature command (`setsettingd settempr`, as documented by the [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro) reverse-engineering effort). Response parsing is tolerant of both formats, and every state read is logged at debug level so format differences on other firmwares are easy to capture and fix.
 
+> **Firmware 1.2.24 and later break local control.** In October 2026 Fellow began updating kettles automatically to firmware 1.2.24 and 1.2.26, which stop returning output from the command interface this integration uses. Most kettles still hold their previous firmware and can be switched back: see [Kettle firmware update stopped local control](#kettle-firmware-update-stopped-local-control). The integration detects this and raises a Repairs card with the steps for your kettle.
+
 ## Features
 
 - Turn the kettle on/off and start keep-warm (Hold) from Home Assistant
@@ -33,7 +35,7 @@ It talks to the kettle's built-in HTTP CLI interface (`http://<kettle-ip>/cli`).
 | Mode | Sensor | Operating mode (Off, Heat, Hold, …) |
 | Set Target | Number (slider) | Set the target temperature **without** starting heating (the sensor above reports; this controls) |
 | Kettle Display Unit | Select (config) | Flip the °C/°F shown on the kettle's own screen |
-| Identify | Button (diagnostic, disabled by default) | Chirp the buzzer to confirm which kettle this is (enable and test; unverified on all firmwares) |
+| Identify | Button (diagnostic, disabled by default) | Beep the buzzer to confirm which kettle this is |
 | Heating | Switch | Start/stop a heating cycle (heats to target, then off) |
 | Warming | Switch | Keep-warm (Hold mode: heats to target and stays there) |
 | Power | Binary Sensor | Power on/off status |
@@ -170,6 +172,8 @@ curl 'http://<KETTLE_IP>/cli?cmd=fwinfo'
 
 > **Never** send `cmd=ss` with no argument (reboots the kettle) or `cmd=adcsamples` (crashes it).
 
+On Windows, type `curl.exe` rather than `curl` in PowerShell (there, `curl` is PowerShell's own web command), or open the addresses in a browser.
+
 ### Debug logging
 
 ```yaml
@@ -200,9 +204,47 @@ ping <KETTLE_IP>                            # answers
 curl -m 5 'http://<KETTLE_IP>/cli?cmd=state'  # hangs / connect timeout
 ```
 
-means the kettle is on WiFi but its ESP32 web server has wedged and stopped accepting TCP connections — observed especially after long or back-to-back heating sessions. **Unplug the kettle's base for ~10 seconds and plug it back in**; entities recover automatically within ~30 seconds (the integration never stops retrying). This is a kettle-firmware limitation, not fixable from Home Assistant; also check the Fellow app for firmware updates.
+means the kettle is on WiFi but its ESP32 web server has wedged and stopped accepting TCP connections — observed especially after long or back-to-back heating sessions. **Unplug the kettle's base for ~10 seconds and plug it back in**; entities recover automatically within ~30 seconds (the integration never stops retrying). This is a kettle-firmware limitation, not fixable from Home Assistant. If instead the kettle answers but every command comes back empty, see the next section.
 
 The integration helps in two ways: while the kettle is unreachable it automatically slows its polling (up to 60s between attempts) so a struggling firmware isn't pinned down by connect attempts, and after ~5 minutes it raises an issue in **Settings → Repairs** describing exactly this fix. The Repair clears itself when the kettle answers again.
+
+### Kettle firmware update stopped local control
+
+**Symptoms:** the entities are unavailable. The kettle answers, but `http://<KETTLE_IP>/cli?cmd=state` shows only an empty "CLI Command" form, for every command, and unplugging the kettle doesn't help. The integration raises a **Settings → Repairs** card naming the firmware.
+
+**Cause:** in October 2026 Fellow began updating kettles automatically to firmware 1.2.24, then 1.2.26. Both stop returning output from the local command interface: commands may still run, but nothing comes back, so nothing can be read. Firmware 1.2.26 has also been observed dropping WiFi while heating or keeping warm.
+
+**Check:** open the kettle's version page, `http://<KETTLE_IP>/`. It shows the running firmware and what each firmware slot holds, for example:
+
+```
+Current version: 1.2.26 CLI
+Boot partition: ota_1
+Running partition: ota_1
+partition 'factory' at 0x10000 size 0x200000 encr 0 state ?? fw version 1.1.14SSB
+partition 'ota_0' at 0x210000 size 0x200000 encr 0 state valid fw version 1.1.76SSP
+partition 'ota_1' at 0x410000 size 0x200000 encr 0 state valid fw version 1.2.26
+```
+
+**Fix: switch back to the previous firmware.** The kettle keeps its previous firmware in the slot it isn't running from (`ota_0` above). If that slot holds an older version, such as `1.1.76SSP`, and isn't marked `invalid`:
+
+1. **Block the kettle's internet access first**, keeping local access. Otherwise the old firmware's update check, about every 30 minutes, reinstalls the update.
+   - **UniFi Network 9 and later:** Settings → Policy Engine (or Security → Firewall) → **Create Policy**. Set the action to **Block**, the source zone to your kettle network's zone (usually Internal), the source to **Device** → the kettle, and the destination zone to **External**.
+   - **Older UniFi:** Settings → Security → **Traffic Rules**: Block · Internet · the kettle. Or use an *Internet Out* firewall rule that drops the kettle's IP.
+   - **Other routers:** block the kettle's IP from reaching the internet. Blocking the update server `qhderznbzup.firmware.fellowproducts.com` in DNS also works if the kettle uses your DNS server.
+
+   While you're there, give the kettle a fixed IP address.
+2. Open `http://<KETTLE_IP>/cli?cmd=setpart+ota_0` in a browser, using your spare slot's name. You'll see only the empty form.
+3. Reload `http://<KETTLE_IP>/` and check that it shows `Boot partition: ota_0`. If it still shows the old slot, the firmware isn't running commands: stop here.
+4. Open `http://<KETTLE_IP>/cli?cmd=reset`. The page won't load while the kettle restarts; that's expected.
+5. After about 30 seconds, the version page should show the older firmware as running, and `cmd=state` returns readings again. Reload the integration, then turn on **Keep the kettle's clock synced** in its options, since the kettle can no longer get the time from the internet.
+
+Keep the internet block on permanently. A later update would also overwrite the spare slot, and with it the way back. **Never send `eraseotherpart`**: it erases the spare slot.
+
+On 1.2.x firmware, the kettle's own *Auto update* menu toggle only passes your preference on to Fellow's update server, which makes the final call, so don't rely on it in place of the router block.
+
+**If the spare slot holds no older firmware** (for example, both slots hold 1.2.x), there's no simple way back. [stagg-ekg-plus-ha](https://github.com/bramboe/stagg-ekg-plus-ha) supports firmware 1.2.26 over Bluetooth, which needs a Bluetooth adapter or an ESPHome Bluetooth proxy within range of the kettle.
+
+The diagnosis and switch-back procedure come from [stagg-ekg-plus-ha issue #5](https://github.com/bramboe/stagg-ekg-plus-ha/issues/5).
 
 ### Setting temperature doesn't stick
 
@@ -214,7 +256,7 @@ The integration tries `setsettingd settempr` (EKG Pro), then the legacy `setsett
 
 ## Technical Details
 
-- **Protocol:** HTTP GET to `/cli?cmd=<command>` on port 80, plain-text responses (an undocumented firmware debug interface — it can change with firmware updates)
+- **Protocol:** HTTP GET to `/cli?cmd=<command>` on port 80, plain-text responses (an undocumented firmware debug interface — it can change with firmware updates). The firmware version and slot table come from the version page at `/`, which still answers when the command interface is muted.
 - **Platform:** ESP32 (Espressif)
 - **Range:** 40–100°C (104–212°F)
 - **Polling:** adaptive — every 3 seconds while heating/keeping warm, every 10 seconds when idle (both configurable in options)
@@ -235,6 +277,7 @@ This is free and unencumbered software released into the public domain. See the 
 - Began as a fork of [rderewianko/fellow-ekg](https://github.com/rderewianko/fellow-ekg), then substantially rewritten for the EKG Pro
 - Took alot of design inspiration from [sopelj](https://github.com/sopelj/hass-ember-mug-component)
 - EKG Pro command set cross-checked against the [stagg-ekg-pro](https://github.com/montymhughes/stagg-ekg-pro) reverse-engineering project
+- Firmware 1.2.x diagnosis, the switch-back procedure, and the Identify beep pattern come from [stagg-ekg-plus-ha](https://github.com/bramboe/stagg-ekg-plus-ha)
 - **Created with AI assistance** — developed with Claude Code
 
 ## Disclaimer
