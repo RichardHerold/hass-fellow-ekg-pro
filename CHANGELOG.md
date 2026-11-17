@@ -15,6 +15,19 @@ the independent
 reverse-engineering project. Thanks to both. The pre-rework history is
 preserved in this repository's git log.
 
+## [1.8.1] - 2026-11-17
+
+### Fixed
+- **No deprecation warnings on Home Assistant 2026.11 or later.** Home
+  Assistant 2026.11 renamed the temperature properties of water heater
+  entities, and it logs a warning for integrations still using the old
+  names, which stop working in Home Assistant 2027.11:
+  "StaggEKGWaterHeater provides the deprecated current_temperature" (and
+  target_temperature). The kettle's water heater now reports its
+  temperatures and unit under the new names. It keeps the old names as
+  well, so Home Assistant versions before 2026.11 still show the kettle's
+  temperatures. Nothing changes on dashboards or in automations.
+
 ## [1.8.0] - 2026-10-13
 
 Firmware-update release. In October 2026 Fellow began pushing firmware

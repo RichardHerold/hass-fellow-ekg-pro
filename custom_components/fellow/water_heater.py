@@ -85,11 +85,11 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             CONF_TEMPERATURE_UNIT, entry.data.get(CONF_TEMPERATURE_UNIT, UNIT_CELSIUS)
         )
         if configured_unit == UNIT_FAHRENHEIT:
-            self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
+            self._attr_native_temperature_unit = UnitOfTemperature.FAHRENHEIT
             self._attr_min_temp = MIN_TEMP_F
             self._attr_max_temp = MAX_TEMP_F
         else:
-            self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+            self._attr_native_temperature_unit = UnitOfTemperature.CELSIUS
             self._attr_min_temp = MIN_TEMP_C
             self._attr_max_temp = MAX_TEMP_C
 
@@ -99,24 +99,36 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             return self.coordinator.data["state"]
         return None
 
-    def _to_display_unit(self, temp_c: float | None) -> float | None:
+    def _to_native_unit(self, temp_c: float | None) -> float | None:
         if temp_c is None:
             return None
-        if self._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT:
+        if self._attr_native_temperature_unit == UnitOfTemperature.FAHRENHEIT:
             return round(temp_c * 9 / 5 + 32, 1)
         return temp_c
 
     @property
-    def current_temperature(self) -> float | None:
-        """Return the current temperature."""
-        state = self._state
-        return self._to_display_unit(state.current_temp_c) if state else None
+    def native_temperature_unit(self) -> str:
+        """Return the unit the temperatures below are in."""
+        return self._attr_native_temperature_unit
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
+        """Return the current temperature."""
+        state = self._state
+        return self._to_native_unit(state.current_temp_c) if state else None
+
+    @property
+    def native_target_temperature(self) -> float | None:
         """Return the target temperature."""
         state = self._state
-        return self._to_display_unit(state.target_temp_c) if state else None
+        return self._to_native_unit(state.target_temp_c) if state else None
+
+    # Home Assistant before 2026.11 reads only these older names. Providing
+    # them next to the native ones keeps 2026.11 and later from reporting the
+    # entity as using a deprecated API.
+    temperature_unit = native_temperature_unit
+    current_temperature = native_current_temperature
+    target_temperature = native_target_temperature
 
     @property
     def current_operation(self) -> str:
@@ -152,7 +164,7 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
             return
 
         # Convert to Celsius if needed
-        if self._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT:
+        if self._attr_native_temperature_unit == UnitOfTemperature.FAHRENHEIT:
             temp_celsius = (temperature - 32) * 5 / 9
         else:
             temp_celsius = temperature
@@ -167,10 +179,9 @@ class StaggEKGWaterHeater(CoordinatorEntity, WaterHeaterEntity):
     async def async_heat_to(self, temperature: float) -> None:
         """Set the target temperature and start heating, in one action.
 
-        The temperature is interpreted in this entity's display unit,
-        matching set_temperature semantics.
+        The temperature is in the unit chosen in the integration's options.
         """
-        if self._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT:
+        if self._attr_native_temperature_unit == UnitOfTemperature.FAHRENHEIT:
             temp_celsius = (temperature - 32) * 5 / 9
         else:
             temp_celsius = temperature
